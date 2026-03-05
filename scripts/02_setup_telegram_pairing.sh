@@ -197,6 +197,9 @@ main() {
   [[ -f "${OPENCLAW_HOME}/.env" ]] || die "Missing ${OPENCLAW_HOME}/.env. Run Script 1 first."
 
   log_info "Stage 1/7: Collecting Telegram bot token."
+  user_section "User input required"
+  user_step "Paste your Telegram bot token when prompted."
+  user_step "Variable: TELEGRAM_BOT_TOKEN"
   prompt_secret TELEGRAM_BOT_TOKEN "Enter TELEGRAM_BOT_TOKEN"
   upsert_env_var "${OPENCLAW_HOME}/.env" "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN}"
 

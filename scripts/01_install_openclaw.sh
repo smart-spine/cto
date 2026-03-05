@@ -348,6 +348,9 @@ main() {
   require_cmd codex
 
   log_info "Stage 4/9: Collecting secrets."
+  user_section "User input required"
+  user_step "Paste your OpenAI API key when prompted."
+  user_step "Variable: OPENAI_API_KEY"
   prompt_secret OPENAI_API_KEY "Enter OPENAI_API_KEY"
   resolve_gateway_token
 

@@ -191,6 +191,9 @@ print_next_steps() {
   user_step "1) ./scripts/01_install_openclaw.sh"
   user_step "2) ./scripts/02_setup_telegram_pairing.sh"
   user_step "3) ./scripts/03_deploy_cto_agent.sh"
+  user_step "Optional advanced:"
+  user_step "- ./scripts/04_rebind_cto_to_topic.sh   (bind CTO to Telegram group topic)"
+  user_step "- ./scripts/99_uninstall_openclaw.sh     (remove OpenClaw/CTO from this host)"
   user_step "If your shell did not switch automatically, run:"
   user_command "cd ${repo_dir}"
 }
@@ -281,6 +284,12 @@ main() {
   fi
   if [[ -f "${repo_dir}/scripts/03_deploy_cto_agent.sh" ]]; then
     chmod +x "${repo_dir}/scripts/03_deploy_cto_agent.sh" || true
+  fi
+  if [[ -f "${repo_dir}/scripts/04_rebind_cto_to_topic.sh" ]]; then
+    chmod +x "${repo_dir}/scripts/04_rebind_cto_to_topic.sh" || true
+  fi
+  if [[ -f "${repo_dir}/scripts/99_uninstall_openclaw.sh" ]]; then
+    chmod +x "${repo_dir}/scripts/99_uninstall_openclaw.sh" || true
   fi
   if [[ -f "${repo_dir}/scripts/lib/common.sh" ]]; then
     chmod +x "${repo_dir}/scripts/lib/common.sh" || true
