@@ -97,11 +97,22 @@ install_node_22_tarball() {
 }
 
 install_node_22_nodesource() {
+  local setup_log
+  setup_log="$(mktemp)"
+  trap 'rm -f "${setup_log}"' RETURN
+
   log_info "Installing Node.js 22 via NodeSource."
   cleanup_nodesource_repo
-  if ! run_as_root bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"; then
+  if ! run_as_root bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -" >"${setup_log}" 2>&1; then
+    log_warn "NodeSource setup script failed."
+    tail -n 20 "${setup_log}" >&2 || true
+    rm -f "${setup_log}"
+    trap - RETURN
     return 1
   fi
+  rm -f "${setup_log}"
+  trap - RETURN
+
   if ! apt_retry_soft update -qq; then
     return 1
   fi
