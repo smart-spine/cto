@@ -59,6 +59,8 @@ Important:
 - Script 1 prints the generated token and where it is stored (`~/.openclaw/.env`).
 - Save the generated gateway token in a password manager.
 - Script 1 also performs Codex CLI authentication using your OpenAI key.
+- Script 1 runs a Codex healthcheck (`codex exec`) with retries before deployment continues.
+- Temporary healthcheck artifacts are auto-cleaned after the check.
 
 ### 2) Create Telegram bot and get token
 
