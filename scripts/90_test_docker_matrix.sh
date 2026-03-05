@@ -54,7 +54,7 @@ run_case() {
     "${image}" \
     bash -lc '
       set -euo pipefail
-      chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh scripts/04_rebind_cto_to_topic.sh scripts/99_uninstall_openclaw.sh scripts/90_test_docker_matrix.sh
+      chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh scripts/04_rebind_cto_to_topic.sh scripts/05_update_cto_agent.sh scripts/99_uninstall_openclaw.sh scripts/90_test_docker_matrix.sh
       AUTO_CLONE_REPO=false ./scripts/00_bootstrap_dependencies.sh
       ./scripts/01_install_openclaw.sh
       ./scripts/03_deploy_cto_agent.sh

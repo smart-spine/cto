@@ -15,7 +15,7 @@ This deployment package is tuned for **OpenAI API** (not OpenRouter).
 You need:
 - Ubuntu EC2 host
 - SSH access as user `ubuntu` with `sudo`
-- OpenAI API key (Pay-as-you-go)
+- OpenAI API key (Pay-as-you-go), instruction provided in the first step
 - Telegram bot token (from BotFather)
 - Telegram numeric user ID
 
@@ -28,7 +28,32 @@ If needed, use AWS docs:
 
 ## Deploy On A Clean EC2
 
-### 0) Bootstrap dependencies and clone repo
+### 0) Get required tokens first
+
+Before running any script on EC2, prepare both tokens:
+- `OPENAI_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+
+#### 0.1) Create OpenAI API key
+
+1. Open [OpenAI Platform](https://platform.openai.com/) and sign in.
+2. Enable billing (Pay-as-you-go) for API usage.
+3. Open [API Keys](https://platform.openai.com/api-keys) and create a new secret key.
+4. Copy it once and store it in your password manager.
+
+Notes:
+- The key usually starts with `sk-...`
+- You will paste it into Script `01` when prompted.
+
+#### 0.2) Create Telegram bot token
+
+In BotFather:
+- create a bot
+- copy bot token
+
+Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
+
+### 1) Bootstrap dependencies and clone repo
 
 Run on the server:
 
@@ -49,17 +74,6 @@ If shell handoff is not available (common with `curl | bash`), run manually:
 cd ~/cto
 ```
 
-### 1) Create OpenAI API key
-
-1. Open [OpenAI Platform](https://platform.openai.com/) and sign in.
-2. Enable billing (Pay-as-you-go) for API usage.
-3. Open [API Keys](https://platform.openai.com/api-keys) and create a new secret key.
-4. Copy it once and store it in your password manager.
-
-Notes:
-- The key usually starts with `sk-...`
-- You will paste it into Script `01` when prompted.
-
 ### 2) Install OpenClaw + Codex CLI
 
 ```bash
@@ -76,15 +90,7 @@ What Script `01` does:
 - writes runtime files under `~/.openclaw`
 - auto-generates `OPENCLAW_GATEWAY_TOKEN` if missing and stores it in `~/.openclaw/.env`
 
-### 3) Create Telegram bot and get token
-
-In BotFather:
-- create a bot
-- copy bot token
-
-Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
-
-### 4) Connect Telegram and approve pairing
+### 3) Connect Telegram and approve pairing
 
 ```bash
 ./scripts/02_setup_telegram_pairing.sh
@@ -100,7 +106,7 @@ What Script `02` does:
 - waits for pairing trigger
 - auto-approves pairing code
 
-### 5) Get your Telegram numeric user ID
+### 4) Get your Telegram numeric user ID
 
 In Telegram, send this to your bot:
 
@@ -110,7 +116,7 @@ In Telegram, send this to your bot:
 
 Save the numeric user ID.
 
-### 6) Deploy CTO agent (direct chat binding)
+### 5) Deploy CTO agent (direct chat binding)
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
@@ -169,6 +175,28 @@ For advanced users, to route CTO into a Telegram group topic after Script `03`:
 You can pass either:
 - `BIND_TELEGRAM_LINK="https://t.me/c/<group>/<topic>"`
 - or explicit `BIND_GROUP_ID` + `BIND_TOPIC_ID`
+
+## Update CTO Agent (Existing Install)
+
+When new CTO changes are released, run:
+
+```bash
+cd ~/cto
+./scripts/05_update_cto_agent.sh
+```
+
+What Script `05` does:
+- updates this repository to latest `main` by default
+- creates rollback backup under `~/.openclaw/backups/cto-update-<timestamp>`
+- syncs updated `cto-factory` files into `~/.openclaw/workspace-factory`
+- validates `openclaw.json`
+- restarts gateway and runs CTO smoke check
+
+Useful options:
+- `UPDATE_REPO=false` (skip git pull, use local repo state)
+- `CTO_REPO_REF=<tag-or-branch>` (pin update source)
+- `SKIP_CTO_HEALTH_SMOKE=true` (skip local agent smoke)
+- `RESTART_GATEWAY=false` (update files/config without restart)
 
 ## BETA Notes (Existing OpenClaw Installation)
 

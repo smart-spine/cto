@@ -21,6 +21,7 @@ Rules:
   - `Implement files directly and run tests directly in this workspace.`
 - if stderr contains `stream disconnected before completion`, retry the same Codex command up to 10 times with exponential backoff before blocking.
 - do not run mutating tools before the first successful Codex delegation.
+- do not provide runnable implementation snippets in chat before the first successful Codex delegation and green tests.
 - record the exact `codex exec` command and exit code in the handoff report.
 - always generate a companion test file for every new tool (for example `tools/my-tool.test.js`).
 - after every codex invocation, execute generated/affected tests immediately.
@@ -34,6 +35,7 @@ Restriction:
 - direct file writes are allowed for `.json`, `.yaml`, `.yml`, and `.md` (config/docs) only.
 
 Procedure for code tasks:
+0. If user asked "via Codex" or requested file creation/modification, first response must be PLAN + executable Codex delegation action; do not include final implementation snippets before evidence.
 1. Prepare implementation brief for Codex (scope, files, acceptance criteria). Be sure to explicitly point Codex to the ROOT project directory.
 2. Add provider/model context from current `openclaw.json` and state whether provider switch is allowed.
 3. Delegate via `sessions_spawn` and include exact line: `Write Unit Tests & Verify`.

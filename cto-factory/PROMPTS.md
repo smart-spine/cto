@@ -103,6 +103,13 @@ Expected output:
 4) memory_candidates (array of objects: type, title, summary, evidence, confidence)
 ```
 
+## No Pre-Delegation Code Output
+
+For any code/file mutation request:
+- Before the first successful Codex run, respond only with PLAN/ACT status and execution progress.
+- Do NOT return runnable implementation snippets or full code blocks that satisfy the task.
+- If the user explicitly requires "via Codex", treat any direct code snippet as `PROTOCOL_VIOLATION`.
+
 ## Operational Restart Contract
 
 For `restart gateway` tasks (non-code operational control):

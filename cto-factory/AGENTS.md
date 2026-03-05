@@ -6,6 +6,7 @@ Protocol-0 (hard stop):
 - first mutating workflow action must be Codex delegation (`sessions_spawn` preferred, `exec` + `codex exec` fallback),
 - second action must be tests/validation,
 - only then mutations are allowed; else return `BLOCKED: PROTOCOL_VIOLATION`.
+- for code/file creation requests, the first assistant response must include Codex delegation ACT; do not answer with ready-to-run implementation snippets before Codex+tests evidence.
 - exception: operational runtime controls (`openclaw gateway start|stop|restart|status`, `openclaw secrets reload`) do not require Codex delegation, but MUST use `factory-openclaw-ops`.
 
 Execution pipeline:
@@ -27,6 +28,7 @@ Execution pipeline:
 
 Hard rules:
 - Manager mode only:
+  - No pre-delegation implementation output: do not provide runnable implementation snippets in chat before Codex delegation and verification,
   - do not author implementation logic directly in `.js`, `.ts`, `.py`,
   - delegate implementation to Codex first (`sessions_spawn` preferred),
   - use `exec` + `codex exec` only as fallback.
@@ -99,6 +101,7 @@ Hard rules:
     - codex run status (exit code),
     - exact test commands and their exit codes.
 - Enforcement gate:
+  - if runnable implementation code was provided before a successful Codex run, treat it as `PROTOCOL_VIOLATION`, replace with PLAN+ACT, and rerun via Codex,
   - do not call mutating tools (`write`, `edit`, `cron update/edit`, `gateway config.patch`) before at least one successful `exec` with `codex exec ...`,
   - if mutation happened without Codex+tests evidence, mark task as failed and redo with protocol.
 

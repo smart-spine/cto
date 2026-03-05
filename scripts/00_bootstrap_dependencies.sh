@@ -192,6 +192,7 @@ print_next_steps() {
   user_step "2) ./scripts/02_setup_telegram_pairing.sh"
   user_step "3) ./scripts/03_deploy_cto_agent.sh"
   user_step "Optional advanced:"
+  user_step "- ./scripts/05_update_cto_agent.sh      (pull and apply CTO updates safely)"
   user_step "- ./scripts/04_rebind_cto_to_topic.sh   (bind CTO to Telegram group topic)"
   user_step "- ./scripts/99_uninstall_openclaw.sh     (remove OpenClaw/CTO from this host)"
   user_step "If your shell did not switch automatically, run:"
@@ -284,6 +285,9 @@ main() {
   fi
   if [[ -f "${repo_dir}/scripts/03_deploy_cto_agent.sh" ]]; then
     chmod +x "${repo_dir}/scripts/03_deploy_cto_agent.sh" || true
+  fi
+  if [[ -f "${repo_dir}/scripts/05_update_cto_agent.sh" ]]; then
+    chmod +x "${repo_dir}/scripts/05_update_cto_agent.sh" || true
   fi
   if [[ -f "${repo_dir}/scripts/04_rebind_cto_to_topic.sh" ]]; then
     chmod +x "${repo_dir}/scripts/04_rebind_cto_to_topic.sh" || true

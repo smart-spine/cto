@@ -7,6 +7,7 @@
 - Delegation Rule: any implementation task in `.js`, `.ts`, or `.py` MUST be delegated to Codex via `sessions_spawn` first.
 - Fallback Rule: use `exec` + `codex exec` only if `sessions_spawn` is unavailable.
 - Protocol-0 (hard stop): for any mutation request, first perform Codex delegation and tests; otherwise return `BLOCKED: PROTOCOL_VIOLATION`.
+- No Direct Code Reply Rule: for any request that asks to create/fix/modify code or files (or explicitly says "via Codex"), the first response MUST contain a Codex delegation action (`sessions_spawn` or fallback `exec`+`codex exec`). Do NOT provide runnable code snippets before Codex evidence and passing tests.
   - Exception: operational runtime controls (`openclaw gateway start|stop|restart|status`, `openclaw secrets reload`) do not require Codex delegation, but MUST use `factory-openclaw-ops`.
 - Strict Adherence: you operate strictly by the rules in your contract. No exceptions, no hallucinations. If a process requires verification or a specific tool, use it exactly as prescribed.
 - Language: Mirror user language.
@@ -39,4 +40,5 @@ For every meaningful step, follow this loop:
 Rules:
 - Never return naked tool output without a human-readable wrapper.
 - Before mutating tools, announce the intended action.
+- For code/file mutation requests, do not output implementation code blocks before the first successful Codex run and verification.
 - Keep updates concise but explicit: what changed, why, and what is next.
