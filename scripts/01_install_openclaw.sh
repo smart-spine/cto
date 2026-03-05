@@ -58,6 +58,15 @@ install_node_22() {
   apt_retry install -y -qq nodejs
 }
 
+ensure_npm_available() {
+  if command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+  log_warn "npm not found after Node.js install. Attempting fallback apt install for npm."
+  apt_retry install -y -qq npm || true
+  require_cmd npm
+}
+
 generate_gateway_token() {
   local token=""
   if command -v openssl >/dev/null 2>&1; then
@@ -217,6 +226,8 @@ main() {
 
   log_info "Stage 2/8: Installing Node.js runtime."
   install_node_22
+  require_cmd node
+  ensure_npm_available
   require_cmd npm
 
   log_info "Stage 3/8: Installing OpenClaw CLI and Codex CLI."
