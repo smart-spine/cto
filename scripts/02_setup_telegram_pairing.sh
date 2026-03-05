@@ -223,7 +223,10 @@ main() {
   fi
 
   log_info "Stage 6/7: Waiting for pairing trigger from user."
-  echo "Please send any message to your Telegram bot. Press ENTER here when you receive the 'pairing required' message from the bot."
+  user_section "User action required for Telegram pairing"
+  user_step "1) Send any message to your Telegram bot."
+  user_step "2) Wait for the 'pairing required' reply."
+  user_step "3) Press ENTER here to continue."
   if [[ "${AUTO_CONFIRM}" != "true" ]]; then
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
       die "AUTO_CONFIRM must be true when NON_INTERACTIVE=true."
@@ -237,7 +240,9 @@ main() {
   local pairing_code=""
   if ! pairing_code="$(wait_for_pairing_code)"; then
     log_warn "No pending pairing code found within ${TELEGRAM_PAIRING_TIMEOUT_SECONDS}s."
-    log_warn "Run manually when you receive a code: openclaw pairing approve telegram <PAIRING_CODE>"
+    user_section "Manual pairing fallback"
+    user_step "When the Telegram pairing code appears, run:"
+    user_command "openclaw pairing approve telegram <PAIRING_CODE>"
     exit 0
   fi
   pending_json="$(fetch_pairing_requests_json)"

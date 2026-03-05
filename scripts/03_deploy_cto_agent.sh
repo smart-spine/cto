@@ -98,17 +98,17 @@ normalize_bind_mode() {
   local raw="${1:-}"
   raw="$(printf "%s" "${raw}" | tr '[:upper:]' '[:lower:]' | xargs || true)"
   case "${raw}" in
-    topic|group)
+    2|topic|group)
       printf "topic"
       ;;
-    direct|dm|chat)
+    1|direct|dm|chat)
       printf "direct"
       ;;
     "")
       printf ""
       ;;
     *)
-      die "Unsupported BIND_MODE='${1}'. Use: topic or direct."
+      die "Unsupported BIND_MODE='${1}'. Use: 1 (direct) or 2 (topic)."
       ;;
   esac
 }
@@ -430,9 +430,17 @@ collect_binding_inputs() {
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
       BIND_MODE="direct"
     else
-      read -r -p "Bind CTO bot to [topic/direct] (default: direct): " BIND_MODE
-      BIND_MODE="${BIND_MODE:-direct}"
+      user_section "Choose CTO Telegram binding mode"
+      user_step "1) Direct chat with bot (recommended)"
+      user_step "2) Telegram topic link"
+      local bind_choice=""
+      read -r -p "Select option [1/2] (default: 1): " bind_choice
+      bind_choice="${bind_choice:-1}"
+      BIND_MODE="$(normalize_bind_mode "${bind_choice}")"
     fi
+  fi
+  if [[ -z "${BIND_MODE}" ]]; then
+    BIND_MODE="direct"
   fi
   BIND_MODE="$(normalize_bind_mode "${BIND_MODE}")"
 
@@ -509,7 +517,9 @@ main() {
   run_health_checks
 
   log_info "Stage 5/5: Applying Telegram binding for CTO."
-  echo "Deploy ready. Choose how to bind CTO bot: Telegram topic link or direct chat."
+  user_section "Deploy ready: choose CTO binding target"
+  user_step "1) Direct chat with bot"
+  user_step "2) Telegram topic link (example: https://t.me/c/<group>/<topic>)"
   collect_binding_inputs
   apply_cto_binding "${BIND_MODE}" "${BIND_GROUP_ID}" "${BIND_TOPIC_ID}" "${BIND_DIRECT_USER_ID}"
 

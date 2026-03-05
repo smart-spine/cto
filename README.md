@@ -40,8 +40,9 @@ What script `00` does:
 - installs system dependencies
 - cleans stale NodeSource apt records if present
 - clones this repo to `~/cto`
-- opens an interactive shell in `~/cto` (interactive terminals only)
-- prints next commands
+- tries to open an interactive shell in `~/cto` (interactive terminals only)
+- if shell handoff is unavailable (for example `curl | bash`), it prints a clear manual `cd ~/cto` step
+- prints color-highlighted next commands
 
 ## Step-by-Step
 
@@ -98,13 +99,13 @@ Save the numeric user ID.
 ./scripts/03_deploy_cto_agent.sh
 ```
 
-You can bind CTO in two modes:
+The script shows a numeric menu and asks you to choose one option:
 
-1. `direct` (DM with bot)
+1. `1` = `direct` (DM with bot)
 - bind CTO to your private chat with the bot
 - best for admin/ops workflows
 
-2. `topic` (group topic)
+2. `2` = `topic` (group topic)
 - bind CTO to a specific Telegram topic
 - script accepts a link like `https://t.me/c/<group>/<topic>` and parses IDs automatically
 

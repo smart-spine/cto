@@ -18,6 +18,36 @@ log_error() {
   printf "[%s] [ERROR] %s\n" "$(timestamp_utc)" "$*" >&2
 }
 
+init_terminal_colors() {
+  if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
+    C_RESET=$'\033[0m'
+    C_BOLD=$'\033[1m'
+    C_CYAN=$'\033[36m'
+    C_GREEN=$'\033[32m'
+    C_YELLOW=$'\033[33m'
+  else
+    C_RESET=""
+    C_BOLD=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+  fi
+}
+
+init_terminal_colors
+
+user_section() {
+  printf "\n%s%s%s\n" "${C_BOLD}${C_CYAN}" "$*" "${C_RESET}"
+}
+
+user_step() {
+  printf "%s%s%s\n" "${C_GREEN}" "$*" "${C_RESET}"
+}
+
+user_command() {
+  printf "  %s%s%s\n" "${C_YELLOW}" "$*" "${C_RESET}"
+}
+
 die() {
   log_error "$*"
   exit 1
@@ -156,18 +186,21 @@ clone_or_update_repo() {
 
 print_next_steps() {
   local repo_dir="$1"
-  cat <<EOF
+  user_section "Bootstrap completed successfully."
+  user_step "Next steps:"
+  user_step "1) ./scripts/01_install_openclaw.sh"
+  user_step "2) ./scripts/02_setup_telegram_pairing.sh"
+  user_step "3) ./scripts/03_deploy_cto_agent.sh"
+  user_step "If your shell did not switch automatically, run:"
+  user_command "cd ${repo_dir}"
+}
 
-Bootstrap completed successfully.
-
-Next steps:
-1) ./scripts/01_install_openclaw.sh
-2) ./scripts/02_setup_telegram_pairing.sh
-3) ./scripts/03_deploy_cto_agent.sh
-
-If your shell did not switch automatically, run:
-cd ${repo_dir}
-EOF
+print_manual_cd_instructions() {
+  local repo_dir="$1"
+  user_section "Manual step required"
+  user_step "Auto-switch to repository shell is not available in this context."
+  user_step "Run the command below and continue:"
+  user_command "cd ${repo_dir}"
 }
 
 enter_repo_shell_if_interactive() {
@@ -177,16 +210,23 @@ enter_repo_shell_if_interactive() {
   if [[ "${auto_enter}" != "true" ]]; then
     return 0
   fi
-  if [[ ! -t 1 || ! -r /dev/tty ]]; then
+  if [[ ! -d "${repo_dir}" ]]; then
     return 0
   fi
-  if [[ ! -d "${repo_dir}" ]]; then
+
+  if [[ ! -t 0 || ! -t 1 || ! -r /dev/tty || ! -w /dev/tty ]]; then
+    log_warn "Skipping auto-shell switch because no interactive TTY is available."
+    print_manual_cd_instructions "${repo_dir}"
     return 0
   fi
 
   log_info "Opening interactive shell in ${repo_dir} (type 'exit' to return)."
   cd "${repo_dir}" || return 0
-  exec < /dev/tty > /dev/tty 2>&1
+  if ! exec < /dev/tty > /dev/tty 2>&1; then
+    log_warn "Could not attach to /dev/tty for shell handoff."
+    print_manual_cd_instructions "${repo_dir}"
+    return 0
+  fi
   exec "${SHELL:-/bin/bash}" -i
 }
 
