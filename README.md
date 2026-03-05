@@ -38,6 +38,7 @@ What script `00` does:
 - installs system dependencies
 - cleans stale NodeSource apt records if present
 - clones this repo to `~/cto`
+- opens an interactive shell in `~/cto` (interactive terminals only)
 - prints next commands
 
 ## Step-by-Step
@@ -45,8 +46,13 @@ What script `00` does:
 ### 1) Install OpenClaw + Codex CLI
 
 ```bash
+./scripts/01_install_openclaw.sh
+```
+
+If your environment is non-interactive and shell did not switch automatically:
+
+```bash
 cd ~/cto
-chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh
 ./scripts/01_install_openclaw.sh
 ```
 

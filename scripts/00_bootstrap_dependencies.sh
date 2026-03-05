@@ -161,12 +161,33 @@ print_next_steps() {
 Bootstrap completed successfully.
 
 Next steps:
-1) cd ${repo_dir}
-2) chmod +x scripts/lib/common.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh
-3) ./scripts/01_install_openclaw.sh
-4) ./scripts/02_setup_telegram_pairing.sh
-5) ./scripts/03_deploy_cto_agent.sh
+1) ./scripts/01_install_openclaw.sh
+2) ./scripts/02_setup_telegram_pairing.sh
+3) ./scripts/03_deploy_cto_agent.sh
+
+If your shell did not switch automatically, run:
+cd ${repo_dir}
 EOF
+}
+
+enter_repo_shell_if_interactive() {
+  local repo_dir="$1"
+  local auto_enter="${AUTO_ENTER_REPO_SHELL:-true}"
+
+  if [[ "${auto_enter}" != "true" ]]; then
+    return 0
+  fi
+  if [[ ! -t 1 || ! -r /dev/tty ]]; then
+    return 0
+  fi
+  if [[ ! -d "${repo_dir}" ]]; then
+    return 0
+  fi
+
+  log_info "Opening interactive shell in ${repo_dir} (type 'exit' to return)."
+  cd "${repo_dir}" || return 0
+  exec < /dev/tty > /dev/tty 2>&1
+  exec "${SHELL:-/bin/bash}" -i
 }
 
 main() {
@@ -226,6 +247,7 @@ main() {
   fi
 
   print_next_steps "${repo_dir}"
+  enter_repo_shell_if_interactive "${repo_dir}"
 }
 
 main "$@"
