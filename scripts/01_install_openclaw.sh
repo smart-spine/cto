@@ -26,6 +26,16 @@ SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 SKIP_CODEX_LOGIN="${SKIP_CODEX_LOGIN:-false}"
 SKIP_MAIN_AGENT_SMOKE="${SKIP_MAIN_AGENT_SMOKE:-false}"
 
+cleanup_nodesource_repo() {
+  # Remove NodeSource apt entries to avoid stale metadata blocking apt update.
+  run_as_root rm -f \
+    /etc/apt/sources.list.d/nodesource.list \
+    /etc/apt/sources.list.d/nodesource.sources \
+    /etc/apt/sources.list.d/nodesource.list.save \
+    /etc/apt/keyrings/nodesource.gpg \
+    /usr/share/keyrings/nodesource.gpg || true
+}
+
 apt_retry() {
   local attempt=1
   local max_attempts=5
@@ -44,6 +54,63 @@ apt_retry() {
   die "apt-get failed after ${max_attempts} attempts: apt-get $*"
 }
 
+apt_retry_soft() {
+  local attempt=1
+  local max_attempts=5
+  local delay=5
+  while (( attempt <= max_attempts )); do
+    if run_as_root apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=5 "$@"; then
+      return 0
+    fi
+    if (( attempt == max_attempts )); then
+      break
+    fi
+    log_warn "apt-get failed (attempt ${attempt}/${max_attempts}), retrying in ${delay}s"
+    sleep "${delay}"
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+install_node_22_tarball() {
+  local arch uname_arch node_arch node_version tarball_url tmpdir
+  uname_arch="$(uname -m)"
+  case "${uname_arch}" in
+    x86_64|amd64) node_arch="x64" ;;
+    aarch64|arm64) node_arch="arm64" ;;
+    *)
+      die "Unsupported CPU architecture for Node.js tarball: ${uname_arch}"
+      ;;
+  esac
+
+  node_version="$(curl -fsSL https://nodejs.org/dist/index.json | jq -r 'map(select(.version|startswith("v22.")))[0].version')"
+  [[ -n "${node_version}" && "${node_version}" != "null" ]] || die "Failed to resolve latest Node.js v22 version."
+  tarball_url="https://nodejs.org/dist/${node_version}/node-${node_version}-linux-${node_arch}.tar.xz"
+
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "${tmpdir}"' RETURN
+  log_info "Installing Node.js ${node_version} from official tarball (${node_arch})."
+  curl -fsSL "${tarball_url}" -o "${tmpdir}/node.tar.xz"
+  run_as_root tar -xJf "${tmpdir}/node.tar.xz" -C /usr/local --strip-components=1
+  rm -rf "${tmpdir}"
+  trap - RETURN
+}
+
+install_node_22_nodesource() {
+  log_info "Installing Node.js 22 via NodeSource."
+  cleanup_nodesource_repo
+  if ! run_as_root bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"; then
+    return 1
+  fi
+  if ! apt_retry_soft update -qq; then
+    return 1
+  fi
+  if ! apt_retry_soft install -y -qq nodejs; then
+    return 1
+  fi
+  return 0
+}
+
 install_node_22() {
   local node_major=""
   if command -v node >/dev/null 2>&1; then
@@ -53,9 +120,18 @@ install_node_22() {
     log_info "Node.js 22 is already installed."
     return 0
   fi
-  log_info "Installing Node.js 22."
-  run_as_root bash -lc "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"
-  apt_retry install -y -qq nodejs
+  if ! install_node_22_nodesource; then
+    log_warn "NodeSource install failed. Falling back to official Node.js tarball."
+    install_node_22_tarball
+  fi
+
+  if ! command -v node >/dev/null 2>&1; then
+    die "Node.js installation failed: node binary not found."
+  fi
+  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+  if [[ "${node_major}" != "22" ]]; then
+    die "Node.js installation failed: expected major 22, got '${node_major:-unknown}'."
+  fi
 }
 
 ensure_npm_available() {
@@ -221,6 +297,7 @@ run_main_agent_smoke() {
 
 main() {
   log_info "Stage 1/8: Installing base packages."
+  cleanup_nodesource_repo
   apt_retry update -qq
   apt_retry install -y -qq ca-certificates curl git jq python3 python3-venv gnupg lsb-release rsync
 
