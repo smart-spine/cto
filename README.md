@@ -1,6 +1,6 @@
 # CTO Bot Deployment (OpenClaw + OpenAI)
 
-This repository installs OpenClaw and deploys a production-ready **CTO Factory Agent** (`cto-factory`).
+This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`).
 
 What this bot is for:
 - safer agent creation workflow
@@ -106,20 +106,36 @@ You can bind CTO in two modes:
 - bind CTO to a specific Telegram topic
 - script accepts a link like `https://t.me/c/<group>/<topic>` and parses IDs automatically
 
-## [ON YOUR OWN RISK] Existing OpenClaw Install (With Other Agents)
+## BETA Notes (Existing OpenClaw Install)
+
+> **BETA:** The scripts are designed to be additive and safe, but this is not a zero-risk migration path for a busy multi-agent instance.
+
+### Backup first (required)
+
+Script 3 creates timestamped backups of `~/.openclaw/openclaw.json` before patching.
+
+Still take your own manual backup before running deploy on a live system:
+
+```bash
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.manual-backup.$(date +%Y%m%d-%H%M%S)
+```
 
 You can run this repository on top of an already configured OpenClaw instance.
 
-Behavior:
-- script 3 adds/updates the `cto-factory` agent entry
-- script 3 replaces bindings for `cto-factory` only
-- script 3 updates OpenClaw tool-level settings used by CTO (`tools.sessions`, `tools.agentToAgent`)
-- script 3 updates Telegram channel/account fields required for selected CTO binding mode
-- existing agents stay intact
-- config is backed up before changes
-- final config validation runs before completion
+What is relatively safe:
+- files are isolated to `workspace-factory` and `.cto-brain` paths
+- script 3 updates or adds only the `cto-factory` agent entry
+- script 3 replaces bindings for `cto-factory` only, not all bindings
+- final `openclaw config validate --json` is executed before completion
+
+Known side-effect risks:
+- script 3 restarts gateway more than once, so active agent runs can be interrupted
+- Telegram global/account policy fields may be updated for CTO routing and allowlists
+- tool-level settings can be changed globally (`tools.sessions.visibility`, `tools.agentToAgent`)
+- if your existing setup depends on stricter session isolation or broader Telegram access, behavior can change
 
 Still recommended:
+- run in a maintenance window
 - keep your own config backup
 - review changes after deploy
 
