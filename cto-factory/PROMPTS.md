@@ -8,7 +8,12 @@ Required line:
 `Write Unit Tests & Verify`
 
 Mandatory requirements in the prompt:
-- Manager-only mode: do not write implementation directly in this session; delegate implementation to Codex.
+- Manager mode applies only to CTO session:
+  - CTO delegates implementation to Codex.
+  - Delegated Codex worker writes code directly.
+- Worker mode applies inside `codex exec`:
+  - The delegated worker MUST NOT run `codex` or `codex exec` recursively.
+  - The delegated worker MUST implement files and run tests directly in the current workspace.
 - Before code generation for new agents: include confirmed intake decisions from the user (behavior, schedule, channels, escalation, safety policy).
 - Provider/model guard:
   - read root `openclaw.json` and pass current provider/model context into the prompt,
@@ -30,6 +35,21 @@ Mandatory requirements in the prompt:
 - Return memory candidates for long-term storage (type + title + summary + evidence).
 - Execute through Codex CLI (no direct in-session code mutation first).
 
+## Codex CLI Invocation Safety
+
+Mandatory invocation rules:
+- For `codex exec --model`, use a bare model id (for example `gpt-5.3-codex`), not provider-prefixed ids (`openai/gpt-5.3-codex`).
+- Avoid shell command-substitution in prompts:
+  - do not place backticks in a double-quoted shell prompt,
+  - prefer single-quoted strings or stdin (`printf ... | codex exec ... -`).
+- If reasoning effort override is needed, use config key `model_reasoning_effort` (for example `-c model_reasoning_effort=\"high\"`).
+- If the requested reasoning level is unsupported in the runtime (for example `extrahigh`), fall back to the highest supported level and report the actual level used.
+
+Transient stream error policy (`https://api.openai.com/v1/responses`):
+- If stderr contains `stream disconnected before completion`, treat it as transient.
+- Retry the same `codex exec` command up to 10 attempts with exponential backoff.
+- Only after max retries, return `BLOCKED: PROTOCOL_VIOLATION` with full evidence (commands, exit codes, retry count).
+
 ## Agent Build Intake Survey (Mandatory)
 
 When task intent is "build/create/design a new agent", gather and confirm these fields before CODE:
@@ -48,7 +68,7 @@ Do not enter CODE until these are either explicitly answered or consciously defa
 
 Codex execution template:
 ```bash
-codex exec --ephemeral --skip-git-repo-check --sandbox workspace-write --cd <root_project_workspace> "<task + constraints + Write Unit Tests & Verify>"
+printf "%s" "<worker prompt>" | codex exec --ephemeral --skip-git-repo-check --sandbox workspace-write --cd <root_project_workspace> --model <bare_model_id> -c model_reasoning_effort="high" -
 ```
 
 Mandatory post-Codex verification:
@@ -62,9 +82,11 @@ Prompt template:
 Task: <short task description>
 
 Constraints:
+- You are running inside codex exec.
+- Do NOT run `codex` or `codex exec`.
+- Implement files directly in this workspace and run tests directly.
 - Work only inside workspace-<agent_name>/ (relative to the .openclaw root)
 - Register the new agent in openclaw.json at the root of the workspace
-- You are an Architect/Manager, not a coder in this session
 - Provider context: <provider + currently used model family from openclaw.json>
 - Model options: <option A / option B / option C with short tradeoffs>
 - Confirmed intake decisions: <behavior survey summary>

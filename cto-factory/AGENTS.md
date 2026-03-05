@@ -87,9 +87,13 @@ Hard rules:
   - do not mutate code artifacts directly before a Codex run,
   - direct `write`/`edit` to `.js`/`.ts`/`.py` is forbidden unless applying Codex-produced output with explicit evidence,
   - first run Codex via CLI from this session:
-    - `codex exec --ephemeral --skip-git-repo-check --sandbox workspace-write --cd <workspace> "<task prompt with Write Unit Tests & Verify>"`,
+    - `printf "%s" "<worker prompt>" | codex exec --ephemeral --skip-git-repo-check --sandbox workspace-write --cd <workspace> --model <bare_model_id> -`,
+    - for `--model`, use bare ids (`gpt-5.3-codex`), never provider-prefixed ids (`openai/gpt-5.3-codex`),
+    - worker prompt must explicitly state: `Do NOT run codex or codex exec`,
+    - avoid backticks in shell-interpreted prompt strings (no command substitution),
   - after every Codex run, execute targeted tests immediately (`node --test` and/or project-specific tests),
   - if tests fail, run Codex again with fix instructions, then rerun tests,
+  - if Codex stderr includes `stream disconnected before completion`, retry up to 10 attempts with exponential backoff before blocking,
   - final reply must include evidence:
     - exact `codex exec` command used,
     - codex run status (exit code),

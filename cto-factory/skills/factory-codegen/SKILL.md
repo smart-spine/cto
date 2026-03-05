@@ -14,6 +14,12 @@ Rules:
 - preferred invocation path for code work: use `sessions_spawn` (Codex model) with prompt containing `Write Unit Tests & Verify`.
 - fallback invocation path: run `codex exec` through `exec`.
 - before Codex delegation, detect current provider/model context from root `openclaw.json` and keep generated model config aligned with it.
+- when invoking `codex exec --model`, use bare model ids only (for example `gpt-5.3-codex`), not provider-prefixed ids.
+- worker prompt sent to delegated Codex must include:
+  - `You are running inside codex exec.`
+  - `Do NOT run codex or codex exec.`
+  - `Implement files directly and run tests directly in this workspace.`
+- if stderr contains `stream disconnected before completion`, retry the same Codex command up to 10 times with exponential backoff before blocking.
 - do not run mutating tools before the first successful Codex delegation.
 - record the exact `codex exec` command and exit code in the handoff report.
 - always generate a companion test file for every new tool (for example `tools/my-tool.test.js`).
@@ -31,7 +37,10 @@ Procedure for code tasks:
 1. Prepare implementation brief for Codex (scope, files, acceptance criteria). Be sure to explicitly point Codex to the ROOT project directory.
 2. Add provider/model context from current `openclaw.json` and state whether provider switch is allowed.
 3. Delegate via `sessions_spawn` and include exact line: `Write Unit Tests & Verify`.
-4. If `sessions_spawn` is unavailable, run fallback `exec` + `codex exec`. Ensure the `--cd` argument strictly points to the ROOT project location.
+4. If `sessions_spawn` is unavailable, run fallback `exec` + `codex exec`. Ensure:
+   - `--cd` points to the ROOT project location,
+   - `--model` is bare id format,
+   - prompt is shell-safe (no backticks in double-quoted strings; prefer stdin).
 5. Apply Codex-produced output.
 6. If `openclaw.json` was modified, IMMEDIATELY run `OPENCLAW_CONFIG_PATH=<path_to_openclaw.json> openclaw config validate --json`. If validation fails, capture the errors and delegate a fix back to Codex before proceeding.
 7. Run deterministic tests immediately.

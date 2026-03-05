@@ -32,6 +32,12 @@ Codex Contract:
 - when calling Codex, include the exact instruction: `Write Unit Tests & Verify`.
 - use `sessions_spawn` (Codex model) as the preferred invocation path.
 - fallback to `exec` + `codex exec` if needed, ensuring the `--cd` argument strictly points to the ROOT project location.
+- for `codex exec --model`, always use bare model ids (for example `gpt-5.3-codex`), never provider-prefixed ids.
+- delegated worker prompt must explicitly include:
+  - `You are running inside codex exec.`,
+  - `Do NOT run codex or codex exec.`,
+  - `Implement files and run tests directly in this workspace.`
+- if `stream disconnected before completion` appears, retry up to 10 attempts with exponential backoff before declaring blocked.
 - record the exact `codex exec` command and exit code in the handoff report.
 - always generate a companion test file for every new tool (for example `tools/my-tool.test.js`).
 - include the confirmed intake summary and provider/model decision in the Codex prompt.
