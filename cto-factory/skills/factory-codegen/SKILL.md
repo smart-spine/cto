@@ -1,0 +1,39 @@
+---
+name: factory-codegen
+description: Orchestrate code generation through Codex with mandatory tests.
+---
+
+Rules:
+- prefer incremental edits,
+- keep config machine-readable,
+- preserve SecretRef credential objects,
+- avoid writing plaintext secrets.
+- treat any behavior mutation (including cron payload/prompt/config edits) as code/config work.
+- this skill is intended for generic code/config mutations. Do NOT use this skill for generating entirely new agents (use `factory-create-agent` for that).
+- when calling Codex include exact instruction: `Write Unit Tests & Verify, make changes in case of failures and revalidate. Repeat until success.`.
+- preferred invocation path for code work: use `sessions_spawn` (Codex model) with prompt containing `Write Unit Tests & Verify`.
+- fallback invocation path: run `codex exec` through `exec`.
+- before Codex delegation, detect current provider/model context from root `openclaw.json` and keep generated model config aligned with it.
+- do not run mutating tools before the first successful Codex delegation.
+- record the exact `codex exec` command and exit code in the handoff report.
+- always generate a companion test file for every new tool (for example `tools/my-tool.test.js`).
+- after every codex invocation, execute generated/affected tests immediately.
+- if test fails, run codex again with a fix prompt and rerun tests until green before handoff.
+- include codex command + codex exit code + test command output + pass/fail status in the final report to CTO.
+- if Codex delegation was skipped, mark task `BLOCKED: PROTOCOL_VIOLATION`.
+- do not run broad host diagnostics by default (`find /Users`, `env | grep token|secret`) for regular coding tasks.
+
+Restriction:
+- you are forbidden from direct `write`, `edit`, or `apply_patch` implementation of `.js`, `.ts`, or `.py` logic.
+- direct file writes are allowed for `.json`, `.yaml`, `.yml`, and `.md` (config/docs) only.
+
+Procedure for code tasks:
+1. Prepare implementation brief for Codex (scope, files, acceptance criteria). Be sure to explicitly point Codex to the ROOT project directory.
+2. Add provider/model context from current `openclaw.json` and state whether provider switch is allowed.
+3. Delegate via `sessions_spawn` and include exact line: `Write Unit Tests & Verify`.
+4. If `sessions_spawn` is unavailable, run fallback `exec` + `codex exec`. Ensure the `--cd` argument strictly points to the ROOT project location.
+5. Apply Codex-produced output.
+6. If `openclaw.json` was modified, IMMEDIATELY run `OPENCLAW_CONFIG_PATH=<path_to_openclaw.json> openclaw config validate --json`. If validation fails, capture the errors and delegate a fix back to Codex before proceeding.
+7. Run deterministic tests immediately.
+8. If tests fail, delegate a fix to Codex and rerun tests until green.
+9. Report evidence: delegation method, command/call id, exit code, test commands, test exit codes, and `openclaw.json` validation results.

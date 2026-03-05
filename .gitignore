@@ -1,0 +1,12 @@
+.DS_Store
+*.log
+*.tmp
+*.bak
+*.bak.*
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+.openclaw/
