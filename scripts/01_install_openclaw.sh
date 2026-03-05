@@ -20,11 +20,11 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_PORT="${OPENCLAW_PORT:-18789}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
-GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-prompt}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 SKIP_CODEX_LOGIN="${SKIP_CODEX_LOGIN:-false}"
 SKIP_MAIN_AGENT_SMOKE="${SKIP_MAIN_AGENT_SMOKE:-false}"
+GATEWAY_TOKEN_GENERATED="false"
 
 cleanup_nodesource_repo() {
   # Remove NodeSource apt entries to avoid stale metadata blocking apt update.
@@ -176,47 +176,26 @@ resolve_gateway_token() {
     return 0
   fi
 
-  if [[ "${NON_INTERACTIVE}" == "true" ]]; then
-    case "${GATEWAY_TOKEN_MODE}" in
-      auto|prompt|"")
-        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically (non-interactive mode)."
-        ;;
-      manual)
-        die "GATEWAY_TOKEN_MODE=manual requires OPENCLAW_GATEWAY_TOKEN to be set."
-        ;;
-      *)
-        die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
-        ;;
-    esac
-    return 0
-  fi
+  OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+  GATEWAY_TOKEN_GENERATED="true"
+  log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+}
 
-  case "${GATEWAY_TOKEN_MODE}" in
-    auto)
-      OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-      log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
-      ;;
-    manual)
-      prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      ;;
-    prompt|"")
-      echo "Choose OPENCLAW_GATEWAY_TOKEN setup:"
-      echo "  1) Auto-generate now (recommended)"
-      echo "  2) Enter manually"
-      local choice=""
-      read -r -p "Choice [1/2] (default 1): " choice
-      if [[ "${choice}" == "2" ]]; then
-        prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      else
-        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
-      fi
-      ;;
-    *)
-      die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
-      ;;
-  esac
+print_gateway_token_notice() {
+  cat <<EOF
+
+Gateway token is configured.
+
+Token value:
+${OPENCLAW_GATEWAY_TOKEN}
+
+Stored in:
+${OPENCLAW_HOME}/.env
+
+Recommended next step:
+- save this token in a password manager.
+
+EOF
 }
 
 ensure_openclaw_config() {
@@ -369,6 +348,9 @@ main() {
 
   log_info "OpenClaw installation completed successfully."
   log_info "Gateway log: ${OPENCLAW_HOME}/logs/gateway-run.log"
+  if [[ "${GATEWAY_TOKEN_GENERATED}" == "true" ]]; then
+    print_gateway_token_notice
+  fi
 }
 
 main "$@"
