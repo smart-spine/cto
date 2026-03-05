@@ -15,7 +15,6 @@ The deployment package is tuned for **OpenAI** (not OpenRouter).
 Out of scope in this guide:
 - creating an EC2 instance
 - SSH key management
-- OpenAI API key generation
 
 If you need help with that, use AWS docs:
 - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html
@@ -25,7 +24,7 @@ You need:
 - SSH access as user `ubuntu` (with `sudo`)
 - OpenAI API key (Pay-as-you-go key from OpenAI Platform)
 - Telegram bot token (from BotFather)
-- Your Telegram user ID (Covered in step 4 but can also be received from @userinfobot in Telegram)
+- Your Telegram user ID (Covered in step 5 but can also be received from @userinfobot in Telegram)
 - [Optional] Your Telegram group's topic link (can be copied from the topic page in Telegram)
 
 ## Quick Start (Clean EC2)
@@ -46,7 +45,17 @@ What script `00` does:
 
 ## Step-by-Step
 
-### 1) Install OpenClaw + Codex CLI
+### 1) Create OpenAI API key
+
+1. Open [OpenAI Platform](https://platform.openai.com/) and sign in.
+2. Ensure billing is enabled for API usage (Pay-as-you-go).
+3. Open [API keys](https://platform.openai.com/api-keys) and create a new secret key.
+4. Copy the key once and store it in a password manager.
+
+Key format usually starts with `sk-...`.
+You will paste this key into Script 1 when prompted for `OPENAI_API_KEY`.
+
+### 2) Install OpenClaw + Codex CLI
 
 ```bash
 ./scripts/01_install_openclaw.sh
@@ -63,14 +72,14 @@ Important:
 - Script 1 runs a Codex healthcheck (`codex exec`) with retries before deployment continues.
 - Temporary healthcheck artifacts are auto-cleaned after the check.
 
-### 2) Create Telegram bot and get token
+### 3) Create Telegram bot and get token
 
 In BotFather:
 - create a bot (detailed walkthrough in the community guide:
   https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
 - copy bot token
 
-### 3) Connect Telegram and approve pairing
+### 4) Connect Telegram and approve pairing
 
 ```bash
 ./scripts/02_setup_telegram_pairing.sh
@@ -83,7 +92,7 @@ This script:
 - waits for pairing request
 - auto-approves pairing code
 
-### 4) Get your Telegram user ID
+### 5) Get your Telegram user ID
 
 Send this to your bot in Telegram:
 
@@ -93,7 +102,7 @@ Send this to your bot in Telegram:
 
 Save the numeric user ID.
 
-### 5) Deploy CTO agent and choose binding mode
+### 6) Deploy CTO agent and choose binding mode
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
