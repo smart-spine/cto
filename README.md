@@ -74,6 +74,8 @@ If shell handoff is not available (common with `curl | bash`), run manually:
 cd ~/cto
 ```
 
+<img src="docs/images/deploy-console/01-bootstrap-console.png" alt="Bootstrap dependencies and clone repo console output" width="960">
+
 ### 2) Install OpenClaw + Codex CLI
 
 ```bash
@@ -90,6 +92,8 @@ What Script `01` does:
 - writes runtime files under `~/.openclaw`
 - auto-generates `OPENCLAW_GATEWAY_TOKEN` if missing and stores it in `~/.openclaw/.env`
 
+<img src="docs/images/deploy-console/02-install-console.png" alt="OpenClaw and Codex CLI installation console output" width="960">
+
 ### 3) Connect Telegram and approve pairing
 
 ```bash
@@ -105,6 +109,8 @@ What Script `02` does:
 - restarts gateway
 - waits for pairing trigger
 - auto-approves pairing code
+
+<img src="docs/images/deploy-console/03-pairing-console.png" alt="Telegram pairing console output" width="960">
 
 ### 4) Get your Telegram numeric user ID
 
@@ -123,6 +129,8 @@ Save the numeric user ID.
 ```
 
 Script `03` deploys `cto-factory` and binds it to **direct chat** with your Telegram user.
+
+<img src="docs/images/deploy-console/04-deploy-console.png" alt="CTO agent deployment console output" width="960">
 
 ## Verify Deployment
 
