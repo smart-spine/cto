@@ -68,7 +68,7 @@ Script `00` will:
 - try to switch you into `~/cto`
 - print color-highlighted next steps
 
-If shell handoff is not available (common with `curl | bash`), run manually:
+If shell handoff is not available (common with `curl | bash`), run the command below and continue:
 
 ```bash
 cd ~/cto
@@ -116,26 +116,18 @@ When the script pauses for pairing:
 3. Send any message to the bot.
 4. Wait for the `pairing required` reply.
 5. Return to the terminal and press `ENTER`.
+6. When pairing is approved, copy the Telegram user ID printed in the console.
 
 <img src="docs/images/deploy-console/03-pairing-console.png" alt="Telegram pairing console output" width="960">
 
-### 4) Get your Telegram numeric user ID
-
-In Telegram, send this to your bot:
-
-```text
-/whoami
-```
-
-Save the numeric user ID.
-
-### 5) Deploy CTO agent (direct chat binding)
+### 4) Deploy CTO agent (direct chat binding)
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
 ```
 
 Script `03` deploys `cto-factory` and binds it to **direct chat** with your Telegram user.
+When prompted for the Telegram user ID, paste the ID that Script `02` printed after pairing approval.
 
 <img src="docs/images/deploy-console/04-deploy-console.png" alt="CTO agent deployment console output" width="960">
 
