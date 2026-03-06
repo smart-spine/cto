@@ -150,11 +150,9 @@ openclaw agent --local --agent cto-factory --message "Reply with CTO_FACTORY_OK"
 Prompt example for first real task:
 
 ```text
-Create a new agent called reddit-scraper.
-It should monitor selected subreddits, extract top posts every 30 minutes,
-and publish a short summary with links.
-Ask me the required intake questions before implementation.
-Stop at READY_FOR_APPLY.
+Create a new Reddit monitoring agent for OpenClaw topics.
+It should monitor selected subreddits via RSS and post updates to Telegram.
+Start with your intake survey, collect missing decisions, then run your normal build pipeline and stop at READY_FOR_APPLY.
 ```
 
 ## Example Workflow: CTO Builds and Fixes a Real Agent
