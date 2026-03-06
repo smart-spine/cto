@@ -157,10 +157,58 @@ Ask me the required intake questions before implementation.
 Stop at READY_FOR_APPLY.
 ```
 
-Screenshot placeholders:
-- `[TODO screenshot] BotFather token created`
-- `[TODO screenshot] Pairing approved`
-- `[TODO screenshot] CTO first reply in direct chat`
+## Example Workflow: CTO Builds and Fixes a Real Agent
+
+This is the fastest way to understand how the CTO bot is meant to be used in practice. The example below shows one real loop end-to-end: requirements intake, Codex-backed build, a failed smoke test, an in-place fix, a successful retest, an apply action, and final Telegram output.
+
+### 1) Start with the outcome, not with implementation details
+
+Ask for the agent you want. The CTO bot should stop and run intake before coding.
+
+<img src="docs/images/example-workflow/01-intake-survey.png" alt="CTO intake survey for a Reddit monitoring agent" width="960">
+
+### 2) Expect build evidence, not just a success claim
+
+The CTO bot should show Codex delegation, generated workspace/files, test execution, and config validation before it says `READY_FOR_APPLY`.
+
+<img src="docs/images/example-workflow/02-build-evidence.png" alt="Codex delegation and validation evidence" width="960">
+
+### 3) Force a live smoke test
+
+A good CTO agent does not stop at green unit tests. It should run a real smoke test against the actual delivery path and report the exact failure if something breaks.
+
+<img src="docs/images/example-workflow/03-smoke-failure.png" alt="Smoke test failure with exact delivery error" width="960">
+
+### 4) Fix the existing agent in place
+
+You do not need to rebuild from scratch. Here the CTO bot was told to fix the existing Reddit agent, keep behavior intact, rerun tests, and validate config before apply.
+
+<img src="docs/images/example-workflow/04-targeted-fix.png" alt="Targeted fix for the existing agent with Codex-backed evidence" width="960">
+
+### 5) Retest and prove delivery
+
+After the fix, the bot was re-tested and returned delivery evidence with `sent: true` and no fallback, then it was asked to run the agent immediately.
+
+<img src="docs/images/example-workflow/05-successful-smoke.png" alt="Successful smoke test and run-now validation" width="960">
+
+### 6) Apply after verification
+
+Once the change is verified, you can ask the CTO bot to apply it. In this case it dispatched a gateway restart callback so the updated production binding would be loaded.
+
+<img src="docs/images/example-workflow/06-apply-changes.png" alt="Apply request and production restart step" width="960">
+
+### 7) Final result in Telegram
+
+The finished agent posts raw Reddit items first, then adds a concise summary for that run.
+
+<img src="docs/images/example-workflow/07-live-output.png" alt="Live Telegram output from the Reddit agent" width="960">
+
+What this example demonstrates:
+- The CTO bot should ask questions before coding when requirements are incomplete.
+- Code changes should be routed through `codex`, not hand-written inline by the manager agent.
+- Every meaningful change should be backed by tests and `openclaw config validate --json`.
+- A real smoke test matters more than a green unit test when Telegram delivery is part of the workflow.
+- You can iterate on the same agent safely by tightening prompts and forcing another test cycle.
 
 ## Advanced: Rebind CTO To Group Topic
 
