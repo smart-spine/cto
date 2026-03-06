@@ -110,6 +110,13 @@ What Script `02` does:
 - waits for pairing trigger
 - auto-approves pairing code
 
+When the script pauses for pairing:
+1. Open direct chat with your Telegram bot.
+2. If this is the first time, press `Start` in Telegram.
+3. Send any message to the bot.
+4. Wait for the `pairing required` reply.
+5. Return to the terminal and press `ENTER`.
+
 <img src="docs/images/deploy-console/03-pairing-console.png" alt="Telegram pairing console output" width="960">
 
 ### 4) Get your Telegram numeric user ID

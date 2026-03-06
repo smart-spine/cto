@@ -227,9 +227,11 @@ main() {
 
   log_info "Stage 6/7: Waiting for pairing trigger from user."
   user_section "User action required for Telegram pairing"
-  user_step "1) Send any message to your Telegram bot."
-  user_step "2) Wait for the 'pairing required' reply."
-  user_step "3) Press ENTER here to continue."
+  user_step "1) Open direct chat with your Telegram bot."
+  user_step "2) If this is the first time, press Start in Telegram."
+  user_step "3) Send any message to the bot."
+  user_step "4) Wait for the 'pairing required' reply."
+  user_step "5) Return to this terminal and press ENTER to continue."
   if [[ "${AUTO_CONFIRM}" != "true" ]]; then
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
       die "AUTO_CONFIRM must be true when NON_INTERACTIVE=true."
