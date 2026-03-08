@@ -12,7 +12,9 @@ OPENCLAW_CONFIG_PATH=<path/to/openclaw.json> openclaw config validate --json
 
 Contract:
 - path resolution rule:
-  - if the task modified root config, target MUST be `/Users/uladzislaupraskou/.openclaw/openclaw.json`,
+  - if the task modified root config, target MUST be:
+    - `$OPENCLAW_CONFIG_PATH` (if set), otherwise
+    - `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/openclaw.json`,
   - do NOT default to `workspace-factory/openclaw.json`,
 - run validation against the specific target file,
 - parse JSON output (`valid`, `errors`, line/location hints),

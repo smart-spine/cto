@@ -29,7 +29,7 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - You MAY author/mutate `.md`, `.json`, and SIMPLE `.sh` scripts directly.
 - You MUST delegate ALL complex application logic (`.js`, `.ts`, `.py`) to Codex.
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
-  - `python3 .../scripts/codex_guarded_exec.py ...`
+  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/codex_guarded_exec.py ...`
 - Every Codex run MUST include: `Write Unit Tests & Verify`.
 - After each Codex run, you MUST run tests immediately.
 - If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
@@ -52,8 +52,9 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 ## CONFIG QA RULES
 - `openclaw config validate --json` is MANDATORY when config changes.
 - Config path MUST be explicit and absolute.
-- Canonical root config for this deployment is:
-  - `/Users/uladzislaupraskou/.openclaw/openclaw.json`
+- Canonical root config MUST be resolved in this order:
+  - `$OPENCLAW_CONFIG_PATH` (if set),
+  - otherwise `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/openclaw.json`.
 - NEVER assume config lives under `workspace-factory/`.
 - If validation fails due to SIMPLE JSON syntax (for example missing comma/bracket), fix directly and revalidate.
 - If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to Codex.

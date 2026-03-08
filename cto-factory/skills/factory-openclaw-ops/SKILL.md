@@ -42,7 +42,7 @@ Restart-specific guard:
 - Gateway restart requests must hand off to `factory-gateway-restart`.
 - Never run direct blocking `openclaw gateway restart` as a single silent action.
 - Always use pre-acknowledgement, detached restart dispatcher script, health verification, and callback event.
-- Preferred command: `nohup /usr/bin/env bash ~/.openclaw/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory >/dev/null 2>&1 &`.
+- Preferred command: `nohup /usr/bin/env bash ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory >/dev/null 2>&1 &`.
 - Forbidden for restart: native `gateway` tool call with `action="restart"` (too easy to lose post-restart reply on chat channels).
 
 Reporting template:

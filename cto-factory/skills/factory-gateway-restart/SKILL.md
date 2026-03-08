@@ -11,7 +11,7 @@ Mandatory protocol:
 1. Pre-ack and execution are a single operational step. Text-only acknowledgement is forbidden.
 2. In the same assistant turn, execute a tool action that dispatches restart immediately.
 3. Default restart path is detached dispatcher script:
-   - `~/.openclaw/workspace-factory/scripts/gateway-restart-callback.sh`
+   - `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh`
 4. Dispatcher script must send completion callback:
    - primary transport: `openclaw message send` to the bound Telegram group/topic,
    - fallback transport: `openclaw system event --mode now --text ...`.
@@ -20,12 +20,12 @@ Mandatory protocol:
 
 Required ACT command (recommended):
 ```bash
-nohup /usr/bin/env bash ~/.openclaw/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory >/dev/null 2>&1 &
+nohup /usr/bin/env bash ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory >/dev/null 2>&1 &
 ```
 
 If explicit chat/topic targeting is needed:
 ```bash
-nohup /usr/bin/env bash ~/.openclaw/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory --chat <chat_id> --topic <topic_id> >/dev/null 2>&1 &
+nohup /usr/bin/env bash ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory --chat <chat_id> --topic <topic_id> >/dev/null 2>&1 &
 ```
 
 Post-dispatch verification:

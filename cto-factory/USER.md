@@ -11,3 +11,4 @@ Default behavior:
 - prepare changes,
 - validate,
 - stop at `READY_FOR_APPLY` unless explicit apply is requested.
+- if approval options are presented (`A/B/C`), user may reply with shorthand (`A`, `B`, `C`, or `READY_FOR_APPLY - A`); this is explicit approval intent and must be resolved via pending apply state.

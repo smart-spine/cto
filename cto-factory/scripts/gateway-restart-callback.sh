@@ -5,7 +5,6 @@ AGENT_ID="cto-factory"
 CHAT_ID=""
 TOPIC_ID=""
 TIMEOUT_SECONDS=45
-STATUS_TIMEOUT_SECONDS="${STATUS_TIMEOUT_SECONDS:-6}"
 LOG_DIR="${HOME}/.openclaw/logs"
 
 while [[ $# -gt 0 ]]; do
@@ -126,7 +125,6 @@ PY
   echo "[restart] begin $(date -Iseconds)"
   echo "[restart] agent_id=${AGENT_ID}"
   echo "[restart] target chat=${CHAT_ID:-n/a} topic=${TOPIC_ID:-n/a}"
-  echo "[restart] status_timeout_seconds=${STATUS_TIMEOUT_SECONDS}"
 } >> "${LOG_FILE}" 2>&1
 
 set +e
@@ -143,7 +141,7 @@ deadline_epoch="$(( $(date +%s) + TIMEOUT_SECONDS ))"
 while [[ "$(date +%s)" -lt "${deadline_epoch}" ]]; do
   attempt="$((attempt + 1))"
   set +e
-  STATUS_OUT="$(run_openclaw_with_timeout "${STATUS_TIMEOUT_SECONDS}" env OPENCLAW_NO_UPDATE_CHECK=1 openclaw gateway status 2>&1)"
+  STATUS_OUT="$(run_openclaw_with_timeout 2 openclaw gateway status 2>&1)"
   STATUS_RC=$?
   set -e
   if [[ -n "${STATUS_OUT}" ]]; then
@@ -151,7 +149,7 @@ while [[ "$(date +%s)" -lt "${deadline_epoch}" ]]; do
   else
     printf "[status][attempt=%s][rc=%s] <empty>\n" "${attempt}" "${STATUS_RC}" >> "${LOG_FILE}" 2>&1
   fi
-  if printf "%s" "${STATUS_OUT}" | grep -Eq "RPC probe: ok|\"ok\"[[:space:]]*:[[:space:]]*true"; then
+  if printf "%s" "${STATUS_OUT}" | grep -q "RPC probe: ok"; then
     ok=1
     break
   fi

@@ -35,12 +35,14 @@ Procedure:
 1. Ensure all required directories and `.cto-brain/INDEX.md` exist.
 2. For each candidate, create or update one note file:
    - filename format: `YYYY-MM-DD--<slug>.md`
-   - include fields: `title`, `type`, `summary`, `confidence`, `evidence`, `source_run`.
+   - include fields: `title`, `type`, `summary`, `confidence`, `evidence`, `source_run`, `last_verified`.
 3. Deduplicate:
    - if a note with the same title/type already exists, update that note instead of creating a duplicate.
 4. Archive superseded notes:
    - move outdated files to `.cto-brain/archive/` and add one-line reason.
 5. Refresh `.cto-brain/INDEX.md` with links to recent notes by section.
+6. Staleness hygiene:
+   - during updates, if a referenced note has `last_verified` older than 30 days, add `needs_review: true` flag and surface it in output.
 
 Output contract:
 - return `memory_updates` with:

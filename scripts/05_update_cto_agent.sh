@@ -20,6 +20,7 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
 CTO_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CTO_SEED_DIR="${CTO_SEED_DIR:-${CTO_REPO_ROOT}/cto-factory}"
+DEPLOY_MANIFEST="${DEPLOY_MANIFEST:-${CTO_SEED_DIR}/DEPLOY_MANIFEST.txt}"
 CTO_REPO_REF="${CTO_REPO_REF:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.2}"
 UPDATE_REPO="${UPDATE_REPO:-true}"
@@ -49,7 +50,27 @@ ensure_prerequisites() {
   require_cmd jq
   require_cmd openclaw
   [[ -d "${CTO_SEED_DIR}" ]] || die "CTO seed directory not found: ${CTO_SEED_DIR}"
+  [[ -f "${DEPLOY_MANIFEST}" ]] || die "Missing deploy manifest: ${DEPLOY_MANIFEST}"
   [[ -f "${OPENCLAW_CONFIG_PATH}" ]] || die "Missing ${OPENCLAW_CONFIG_PATH}. Run install/deploy first."
+}
+
+verify_manifest_paths() {
+  local root="$1"
+  local label="$2"
+  local missing=0
+  local rel=""
+
+  while IFS= read -r rel; do
+    [[ -n "${rel}" ]] || continue
+    if [[ ! -e "${root}/${rel}" ]]; then
+      log_error "Missing required path in ${label}: ${root}/${rel}"
+      missing=$((missing + 1))
+    fi
+  done < <(awk '!/^[[:space:]]*(#|$)/{print}' "${DEPLOY_MANIFEST}")
+
+  if (( missing > 0 )); then
+    die "Manifest verification failed for ${label}: ${missing} paths missing."
+  fi
 }
 
 update_repo_if_enabled() {
@@ -108,6 +129,8 @@ sync_workspace_files() {
   local target_workspace="${OPENCLAW_HOME}/workspace-factory"
   local target_has_memory="false"
 
+  verify_manifest_paths "${source_workspace}" "seed"
+
   if [[ -d "${target_workspace}/.cto-brain" ]]; then
     target_has_memory="true"
   fi
@@ -127,6 +150,8 @@ sync_workspace_files() {
   else
     log_warn "Source .cto-brain not found (expected when git-ignored). Existing target memory preserved."
   fi
+
+  verify_manifest_paths "${target_workspace}" "target"
 }
 
 rewrite_hardcoded_paths() {
@@ -142,7 +167,7 @@ needles = [
     "/Users/uladzislaupraskou/.openclaw",
     "/home/ubuntu/.openclaw",
 ]
-extensions = {".md", ".sh", ".txt", ".json", ".yaml", ".yml"}
+extensions = {".md", ".sh", ".py", ".txt", ".json", ".yaml", ".yml", ".toml"}
 updated = 0
 
 for path in root.rglob("*"):
@@ -268,6 +293,10 @@ run_cto_smoke() {
   local out
   out="$(with_openclaw_env openclaw agent --local --agent cto-factory --message "Reply with CTO_FACTORY_OK and one sentence status." --json --timeout 240 2>&1 || true)"
   if ! printf "%s" "${out}" | grep -q "CTO_FACTORY_OK"; then
+    if printf "%s" "${out}" | grep -qi "No API key found for provider"; then
+      log_warn "Skipping CTO smoke failure because API credentials are not configured on this host yet."
+      return 0
+    fi
     printf "%s\n" "${out}" >&2
     die "CTO local smoke failed."
   fi
