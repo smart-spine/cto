@@ -53,11 +53,12 @@ def codex_contract_details() -> dict:
 
 
 def ensure_agent_scaffold(workspace: Path, agent_id: str, title: str, responsibility: str, skills: list[str]) -> dict:
-    agent_root = workspace / "agents" / agent_id
+    agent_root = workspace / f"workspace-{agent_id}"
     config_dir = agent_root / "config"
     tools_dir = agent_root / "tools"
     tests_dir = agent_root / "tests"
-    for path in (agent_root, config_dir, tools_dir, tests_dir):
+    skills_dir = agent_root / "skills"
+    for path in (agent_root, config_dir, tools_dir, tests_dir, skills_dir):
         path.mkdir(parents=True, exist_ok=True)
 
     passport_path = agent_root / "AGENTS.md"
@@ -73,6 +74,23 @@ def ensure_agent_scaffold(workspace: Path, agent_id: str, title: str, responsibi
                 "",
             ]
         ),
+        encoding="utf-8",
+    )
+
+    (agent_root / "IDENTITY.md").write_text(
+        f"# IDENTITY\n\n- Name: {title}\n- Mission: {responsibility}\n",
+        encoding="utf-8",
+    )
+    (agent_root / "TOOLS.md").write_text(
+        "# TOOLS\n\n- Local tools are located in `tools/`.\n",
+        encoding="utf-8",
+    )
+    (agent_root / "PROMPTS.md").write_text(
+        "# PROMPTS\n\nUse concise operational responses.\n",
+        encoding="utf-8",
+    )
+    (skills_dir / "SKILL_INDEX.md").write_text(
+        "# SKILL INDEX\n\n- base-runtime\n",
         encoding="utf-8",
     )
 
@@ -103,6 +121,7 @@ def ensure_agent_scaffold(workspace: Path, agent_id: str, title: str, responsibi
         "config_dir": str(config_dir),
         "tools_dir": str(tools_dir),
         "tests_dir": str(tests_dir),
+        "skills_dir": str(skills_dir),
         "passport": str(passport_path),
     }
 
@@ -123,7 +142,7 @@ def ensure_default_config(config_path: Path) -> dict:
             },
             "order": {"openai": ["openai:main"]},
         },
-        "agents": {"list": [{"id": "main", "default": True, "workspace": "./workspace-main", "agentDir": "./agents/main/agent"}]},
+        "agents": {"list": [{"id": "main", "default": True, "workspace": "./workspace-main", "agentDir": "./workspace-main"}]},
         "bindings": [{"agentId": "main", "match": {"channel": "console"}}],
         "channels": {"console": {"enabled": True}},
     }
@@ -553,7 +572,7 @@ def add_step(trace: dict, name: str, status: str, details: dict | None = None, s
     trace.setdefault("steps", []).append(payload)
 
 
-def build_context_compress(workspace: Path, backup_branch: str, validator: dict) -> dict:
+def build_context_compress(workspace: Path, backup_branch: str, validator: dict, functional_smoke_ok: bool) -> dict:
     diff = run_cmd(["git", "status", "--short"], cwd=workspace)
     lines = [line for line in diff.stdout.splitlines() if line.strip()]
     files = [line[3:] for line in lines if len(line) > 3][:20]
@@ -561,8 +580,9 @@ def build_context_compress(workspace: Path, backup_branch: str, validator: dict)
     compact_summary = {
         "changed_files": files,
         "validation_outcome": "OK" if qa_ok else "FAIL",
+        "functional_smoke_outcome": "OK" if functional_smoke_ok else "FAIL",
         "rollback_pointer": backup_branch,
-        "next_action": "READY_FOR_APPLY" if qa_ok else "RETURN_TO_CODE",
+        "next_action": "READY_FOR_APPLY" if (qa_ok and functional_smoke_ok) else "RETURN_TO_CODE",
     }
     return {
         "changed_count": len(files),
@@ -601,10 +621,11 @@ def main() -> int:
             "CODE",
             "TEST",
             "CONFIG_QA",
+            "FUNCTIONAL_SMOKE",
             "CONTEXT_COMPRESS",
             "READY_FOR_APPLY",
             "APPLY",
-            "SMOKE",
+            "POST_APPLY_SMOKE",
             "DONE/ROLLBACK",
         ],
         "skills_used": [],
@@ -651,8 +672,8 @@ def main() -> int:
                 {
                     "id": "echo-bot",
                     "name": "Echo Bot",
-                    "workspace": "./agents/echo-bot",
-                    "agentDir": "./agents/echo-bot",
+                    "workspace": "./workspace-echo-bot",
+                    "agentDir": "./workspace-echo-bot",
                     "tools": {"localScripts": [str(echo_tool_path.relative_to(workspace))]},
                 },
             )
@@ -681,8 +702,8 @@ def main() -> int:
                 {
                     "id": "forex-bot",
                     "name": "Forex Bot",
-                    "workspace": "./agents/forex-bot",
-                    "agentDir": "./agents/forex-bot",
+                    "workspace": "./workspace-forex-bot",
+                    "agentDir": "./workspace-forex-bot",
                     "tools": {"localScripts": [str(tool_path.relative_to(workspace))]},
                 },
             )
@@ -783,7 +804,28 @@ def main() -> int:
             save_json(trace_file, trace)
             return 1
 
-        compressed = build_context_compress(workspace, backup_branch, validator)
+        functional_smoke = {
+            "scenario": "pre-apply functional smoke",
+            "generated_agents": [item.get("id") for item in generated_agents],
+            "has_generated_agents": len(generated_agents) > 0,
+            "tests_green": not test_failed,
+            "config_qa_green": not qa_failed,
+        }
+        functional_smoke_ok = (not test_failed) and (not qa_failed)
+        add_step(
+            trace,
+            "FUNCTIONAL_SMOKE",
+            "OK" if functional_smoke_ok else "FAIL",
+            functional_smoke,
+            "factory-smoke",
+        )
+        if not functional_smoke_ok:
+            trace["result"] = {"status": "BLOCKED", "reason": "Pre-apply functional smoke failed"}
+            trace["finished_at"] = iso_now()
+            save_json(trace_file, trace)
+            return 1
+
+        compressed = build_context_compress(workspace, backup_branch, validator, functional_smoke_ok)
         add_step(trace, "CONTEXT_COMPRESS", "OK", compressed, "factory-context-compress")
 
         add_step(trace, "READY_FOR_APPLY", "OK", {"apply_phase": apply_phase}, "factory-apply")
@@ -792,8 +834,9 @@ def main() -> int:
         smoke = {
             "config_exists": config_path.exists(),
             "git_status_exit": run_cmd(["git", "status", "--short"], cwd=workspace).returncode,
+            "apply_performed": apply_phase,
         }
-        add_step(trace, "SMOKE", "OK", smoke, "factory-smoke")
+        add_step(trace, "POST_APPLY_SMOKE", "OK", smoke, "factory-smoke")
 
         trace["result"] = {"status": "DONE", "backup_branch": backup_branch}
         trace["finished_at"] = iso_now()
