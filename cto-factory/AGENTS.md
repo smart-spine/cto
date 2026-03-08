@@ -18,6 +18,12 @@ Single-agent owner: `cto-factory`.
 
 This is a state machine, NOT a rigid linear script. You MAY skip non-critical states in lean paths, but you MUST NEVER skip: `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`.
 
+## PATH ANCHOR CONTRACT
+- Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
+- Define `CTO_WORKSPACE` as `${OPENCLAW_ROOT}/workspace-factory`.
+- ALL generated agent workspaces MUST be rooted at `${OPENCLAW_ROOT}/workspace-<agent_name>`.
+- Generated workspaces MUST NOT be created under `${CTO_WORKSPACE}`.
+
 ## STRICT CODEX DELEGATION PROTOCOL
 All delegation rules are centralized here. Other sections MUST reference this block and MUST NOT redefine it.
 
@@ -29,32 +35,35 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - You MAY author/mutate `.md`, `.json`, and SIMPLE `.sh` scripts directly.
 - You MUST delegate ALL complex application logic (`.js`, `.ts`, `.py`) to Codex.
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
-  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/codex_guarded_exec.py ...`
+  - `python3 .../scripts/codex_guarded_exec.py ...`
 - Every Codex run MUST include: `Write Unit Tests & Verify`.
 - After each Codex run, you MUST run tests immediately.
 - If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
 - If Codex transport fails, you MUST retry with bounded backoff and report attempts.
 
 ## NEW AGENT WORKSPACE CONTRACT
-- New agents MUST be isolated in `workspace-<agent_name>/`.
+- New agents MUST be isolated in `${OPENCLAW_ROOT}/workspace-<agent_name>/`.
 - Base profile files MUST be at workspace root (NOT in `agent/`):
-  - `workspace-<agent_name>/IDENTITY.md`
-  - `workspace-<agent_name>/TOOLS.md`
-  - `workspace-<agent_name>/PROMPTS.md`
-  - `workspace-<agent_name>/AGENTS.md` or `README.md`
+  - `${OPENCLAW_ROOT}/workspace-<agent_name>/IDENTITY.md`
+  - `${OPENCLAW_ROOT}/workspace-<agent_name>/TOOLS.md`
+  - `${OPENCLAW_ROOT}/workspace-<agent_name>/PROMPTS.md`
+  - `${OPENCLAW_ROOT}/workspace-<agent_name>/AGENTS.md` or `README.md`
 - Required subfolders:
   - `config/`
   - `tools/`
   - `tests/`
   - `skills/` (with `skills/SKILL_INDEX.md` and at least one concrete skill file)
 - Root `openclaw.json` registration is MANDATORY and MUST match workspace paths.
+- `openclaw.json` entry for created agent MUST use absolute paths:
+  - `workspace = ${OPENCLAW_ROOT}/workspace-<agent_name>`
+  - `agentDir = ${OPENCLAW_ROOT}/workspace-<agent_name>`
+- If a nested path like `${CTO_WORKSPACE}/workspace-<agent_name>` is detected, the run MUST be treated as failed until moved and config references are corrected.
 
 ## CONFIG QA RULES
 - `openclaw config validate --json` is MANDATORY when config changes.
 - Config path MUST be explicit and absolute.
-- Canonical root config MUST be resolved in this order:
-  - `$OPENCLAW_CONFIG_PATH` (if set),
-  - otherwise `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/openclaw.json`.
+- Canonical root config for this deployment is:
+  - `/Users/uladzislaupraskou/.openclaw/openclaw.json`
 - NEVER assume config lives under `workspace-factory/`.
 - If validation fails due to SIMPLE JSON syntax (for example missing comma/bracket), fix directly and revalidate.
 - If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to Codex.

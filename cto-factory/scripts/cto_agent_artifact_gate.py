@@ -25,6 +25,7 @@ def main() -> int:
 
     root = Path(args.root).resolve()
     workspace = root / f"workspace-{args.agent_id}"
+    nested_workspace = root / "workspace-factory" / f"workspace-{args.agent_id}"
     config_path = root / "openclaw.json"
 
     failures: list[str] = []
@@ -36,16 +37,15 @@ def main() -> int:
         workspace / "tools",
         workspace / "tests",
         workspace / "skills",
-        workspace / "agent",
     ]
     for p in required_dirs:
         if not p.exists():
             failures.append(f"missing required directory: {p}")
 
     required_files = [
-        workspace / "agent" / "IDENTITY.md",
-        workspace / "agent" / "TOOLS.md",
-        workspace / "agent" / "PROMPTS.md",
+        workspace / "IDENTITY.md",
+        workspace / "TOOLS.md",
+        workspace / "PROMPTS.md",
     ]
     for p in required_files:
         if not nonempty(p):
@@ -105,7 +105,7 @@ def main() -> int:
         failures.append(f"agent '{args.agent_id}' not found in openclaw.json agents.list")
     else:
         expected_workspace = str(workspace)
-        expected_agent_dir = str(workspace / "agent")
+        expected_agent_dir = str(workspace)
         if agent_entry.get("workspace") != expected_workspace:
             failures.append(
                 "workspace mismatch for agent entry: "
@@ -116,6 +116,12 @@ def main() -> int:
                 "agentDir mismatch for agent entry: "
                 f"expected '{expected_agent_dir}', got '{agent_entry.get('agentDir')}'"
             )
+
+    if nested_workspace.exists():
+        failures.append(
+            "nested workspace detected under cto workspace: "
+            f"{nested_workspace} (must be {workspace})"
+        )
 
     bindings = cfg.get("bindings", [])
     has_binding = any(b.get("agentId") == args.agent_id for b in bindings)

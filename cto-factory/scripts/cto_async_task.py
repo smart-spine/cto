@@ -6,16 +6,12 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-def default_openclaw_home() -> Path:
-    return Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-
-
-OPENCLAW_HOME = default_openclaw_home()
-RUNTIME_DIR = OPENCLAW_HOME / "workspace-factory/.cto-brain/runtime/async-tasks"
+OPENCLAW_ROOT = Path(os.getenv("OPENCLAW_ROOT", str(Path.home() / ".openclaw"))).expanduser().resolve()
+RUNTIME_DIR = OPENCLAW_ROOT / "workspace-factory" / ".cto-brain" / "runtime" / "async-tasks"
 
 
 def now_iso() -> str:
@@ -139,7 +135,33 @@ def cmd_status(args: argparse.Namespace) -> int:
     if not payload:
         print(json.dumps({"ok": False, "error": "task_not_found", "task_id": args.task_id}, ensure_ascii=False))
         return 1
-    print(json.dumps({"ok": True, "task": payload}, ensure_ascii=False))
+
+    task = dict(payload)
+    status = str(task.get("status", "")).lower()
+    lp = Path(task.get("log_file", ""))
+    if status in {"queued", "running"}:
+        threshold = max(1, int(args.stuck_threshold))
+        task["stuck_threshold_seconds"] = threshold
+        if lp.exists():
+            mtime = lp.stat().st_mtime
+            age = max(0, int(time.time() - mtime))
+            task["last_log_update_at"] = (
+                datetime.fromtimestamp(mtime, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            )
+            task["log_idle_seconds"] = age
+            task["stuck"] = age >= threshold
+            task["watchdog_hint"] = (
+                "no log progress for threshold window: send keepalive warning to user"
+                if task["stuck"]
+                else "log activity is recent"
+            )
+        else:
+            task["last_log_update_at"] = None
+            task["log_idle_seconds"] = None
+            task["stuck"] = False
+            task["watchdog_hint"] = "log file missing; verify command and cwd"
+
+    print(json.dumps({"ok": True, "task": task}, ensure_ascii=False))
     return 0
 
 
@@ -173,15 +195,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_start = sp.add_parser("start")
     p_start.add_argument("--task-id", required=True)
     p_start.add_argument("--cmd", dest="command", required=True)
-    p_start.add_argument("--cwd", default=str(OPENCLAW_HOME))
+    p_start.add_argument("--cwd", default=str(OPENCLAW_ROOT))
 
     p_run = sp.add_parser("_run")
     p_run.add_argument("--task-id", required=True)
     p_run.add_argument("--cmd", dest="command", required=True)
-    p_run.add_argument("--cwd", default=str(OPENCLAW_HOME))
+    p_run.add_argument("--cwd", default=str(OPENCLAW_ROOT))
 
     p_status = sp.add_parser("status")
     p_status.add_argument("--task-id", required=True)
+    p_status.add_argument("--stuck-threshold", type=int, default=300)
 
     sp.add_parser("list")
 

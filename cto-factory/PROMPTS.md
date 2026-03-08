@@ -17,7 +17,10 @@ Mandatory constraints:
 
 ## NEW AGENT GENERATION TEMPLATE
 For new agent tasks, prompt MUST enforce:
-- Workspace path: `workspace-<agent_name>/`.
+- Workspace path MUST be absolute and rooted at `OPENCLAW_ROOT`:
+  - `<OPENCLAW_ROOT>/workspace-<agent_name>/`
+- NEVER use relative target like `workspace-<agent_name>/` from current cwd.
+- If current cwd is `<OPENCLAW_ROOT>/workspace-factory`, generated files MUST still go to sibling path `../workspace-<agent_name>/`.
 - Base profile files at workspace root:
   - `IDENTITY.md`
   - `TOOLS.md`
@@ -28,7 +31,9 @@ For new agent tasks, prompt MUST enforce:
 - Skill package minimum:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<name>/SKILL.md`
-- Root config registration in `openclaw.json`.
+- Root config registration in `openclaw.json` with absolute paths:
+  - `workspace = <OPENCLAW_ROOT>/workspace-<agent_name>`
+  - `agentDir = <OPENCLAW_ROOT>/workspace-<agent_name>`
 
 ## VERIFICATION REQUIREMENTS
 After Codex output:

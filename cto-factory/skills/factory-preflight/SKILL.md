@@ -12,6 +12,9 @@ Checks:
 - gateway health is captured (`openclaw gateway status`) for tasks that require runtime checks/telegram delivery,
 - root `openclaw.json` provider/model context is read and summarized before CODE,
 - provider/model proposal aligns with currently used provider family unless explicitly overridden by user,
+- codex model id sanity is checked before delegation:
+  - malformed/provider-prefixed model ids (for example `openai-codex/gpt-5.3-codex`) are normalized or flagged,
+  - chosen fallback is reported before CODE starts,
 - for cross-agent orchestration tasks: verify `tools.sessions.visibility` is `all`,
 - for cross-agent orchestration tasks: verify `tools.agentToAgent.enabled` is `true` and `tools.agentToAgent.allow` includes both requester and target patterns,
 - `.cto-brain/INDEX.md` exists (or is created) and typed memory folders are present:

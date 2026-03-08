@@ -17,7 +17,9 @@ Create a fully runnable agent for the requested business use-case, not a scaffol
 If critical inputs are missing, return `BLOCKED: MISSING_CRITICAL_INPUTS`.
 
 ## REQUIRED STRUCTURE
-Create `workspace-<agent_name>/` with:
+Resolve `OPENCLAW_ROOT` first (directory containing root `openclaw.json`).
+
+Create `<OPENCLAW_ROOT>/workspace-<agent_name>/` with:
 - root profile files:
   - `IDENTITY.md`
   - `TOOLS.md`
@@ -32,7 +34,8 @@ Create `workspace-<agent_name>/` with:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<skill-name>/SKILL.md`
 
-Do NOT place base profile files in `workspace-<agent_name>/agent/`.
+Do NOT place base profile files in `<OPENCLAW_ROOT>/workspace-<agent_name>/agent/`.
+Do NOT create nested workspace under `workspace-factory/workspace-<agent_name>`.
 
 ## CODEX EXECUTION RULES
 - Follow `STRICT CODEX DELEGATION PROTOCOL` from `AGENTS.md`.
@@ -55,8 +58,17 @@ If prerequisites for smoke are missing, return `BLOCKED` with exact missing prer
 ## REGISTRATION
 Update root `openclaw.json`:
 - add/refresh agent entry,
-- set `workspace` to `workspace-<agent_name>`,
+- set `workspace` to `<OPENCLAW_ROOT>/workspace-<agent_name>`,
+- set `agentDir` to `<OPENCLAW_ROOT>/workspace-<agent_name>`,
 - keep paths consistent and valid.
+
+## PATH SANITY GATE (MANDATORY)
+Before `READY_FOR_APPLY`, verify all:
+1. `<OPENCLAW_ROOT>/workspace-<agent_name>` exists.
+2. `<OPENCLAW_ROOT>/workspace-factory/workspace-<agent_name>` does NOT exist.
+3. `openclaw.json` points to root-level workspace path only.
+
+If any check fails, return `BLOCKED: WORKSPACE_PATH_INVALID`.
 
 ## DONE CRITERIA
 Return `READY_FOR_APPLY` ONLY if structure, tests, config validation, and pre-apply functional smoke are all green.

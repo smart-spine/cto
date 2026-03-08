@@ -6,12 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+DEFAULT_MODEL = "gpt-5.3-codex"
+MODEL_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -20,12 +25,18 @@ def parse_args() -> argparse.Namespace:
     )
     p = argparse.ArgumentParser(description="Run codex exec with retries and long-running timeout support")
     p.add_argument("--workdir", required=True, help="Project root passed to codex --cd")
-    p.add_argument("--model", default="gpt-5.3-codex", help="Codex model")
+    p.add_argument("--model", default=DEFAULT_MODEL, help="Codex model")
     p.add_argument("--prompt-file", help="Path to file with prompt text")
     p.add_argument("--prompt", help="Inline prompt text")
     p.add_argument("--retries", type=int, default=5, help="Max attempts")
     p.add_argument("--timeout", type=int, default=10800, help="Per-attempt timeout (seconds)")
     p.add_argument("--backoff", type=float, default=2.0, help="Base backoff seconds")
+    p.add_argument(
+        "--heartbeat-interval",
+        type=int,
+        default=75,
+        help="Emit 'still running' heartbeat every N seconds while codex exec is active",
+    )
     p.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high"], default=None)
     p.add_argument("--failure-budget", type=int, default=3, help="Consecutive failed runs allowed per session")
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
@@ -61,6 +72,28 @@ def build_cmd(args: argparse.Namespace) -> list[str]:
         cmd.extend(["-c", f"reasoning_effort=\"{args.reasoning_effort}\""])
     cmd.append("-")
     return cmd
+
+
+def normalize_model_id(requested_model: str) -> tuple[str, str | None]:
+    requested = (requested_model or "").strip()
+    if not requested:
+        return DEFAULT_MODEL, f"Model id is empty; falling back to '{DEFAULT_MODEL}'."
+
+    normalized = requested.split("/")[-1].strip()
+    warning_parts: list[str] = []
+
+    if normalized != requested:
+        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
+
+    if not normalized or not MODEL_TOKEN_RE.match(normalized):
+        warning_parts.append(f"invalid model token '{normalized}'")
+        normalized = DEFAULT_MODEL
+        warning_parts.append(f"fallback to '{DEFAULT_MODEL}'")
+
+    if normalized != requested and not warning_parts:
+        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
+    warning = "; ".join(warning_parts) if warning_parts else None
+    return normalized, warning
 
 
 def is_retryable(stderr: str, stdout: str, returncode: int) -> bool:
@@ -119,6 +152,86 @@ def mark_failure(path: Path, state: dict, session_id: str) -> int:
     return current
 
 
+def _pipe_reader(pipe, sink: list[str]) -> None:
+    try:
+        for chunk in iter(lambda: pipe.read(4096), ""):
+            if not chunk:
+                break
+            sink.append(chunk)
+    finally:
+        try:
+            pipe.close()
+        except Exception:
+            pass
+
+
+def run_with_heartbeat(
+    cmd: list[str],
+    prompt: str,
+    timeout: int,
+    heartbeat_interval: int,
+    attempt_index: int,
+) -> dict:
+    started = time.time()
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+    out_chunks: list[str] = []
+    err_chunks: list[str] = []
+    out_thread = threading.Thread(target=_pipe_reader, args=(proc.stdout, out_chunks), daemon=True)
+    err_thread = threading.Thread(target=_pipe_reader, args=(proc.stderr, err_chunks), daemon=True)
+    out_thread.start()
+    err_thread.start()
+
+    if proc.stdin is not None:
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+
+    heartbeats = 0
+    next_heartbeat_at = started + max(1, heartbeat_interval)
+    timed_out = False
+
+    while proc.poll() is None:
+        now = time.time()
+        if now - started >= timeout:
+            timed_out = True
+            proc.kill()
+            break
+        if now >= next_heartbeat_at:
+            elapsed = int(now - started)
+            heartbeats += 1
+            print(
+                f"[codex-guard] still running attempt={attempt_index} elapsed={elapsed}s",
+                file=sys.stderr,
+                flush=True,
+            )
+            next_heartbeat_at = now + max(1, heartbeat_interval)
+        time.sleep(1)
+
+    returncode = 124 if timed_out else proc.wait()
+    out_thread.join(timeout=2)
+    err_thread.join(timeout=2)
+    stdout = "".join(out_chunks)
+    stderr = "".join(err_chunks)
+    if timed_out:
+        stderr = f"{stderr}\nTIMEOUT".strip()
+
+    return {
+        "exit_code": returncode,
+        "duration_seconds": round(time.time() - started, 3),
+        "stdout": stdout,
+        "stderr": stderr,
+        "heartbeats": heartbeats,
+        "timed_out": timed_out,
+    }
+
+
 def main() -> int:
     args = parse_args()
     # Allow long-running Codex jobs (multi-hour) without clamping upper bounds.
@@ -126,6 +239,11 @@ def main() -> int:
     args.retries = max(1, args.retries)
     args.timeout = max(10800, args.timeout)
     prompt = load_prompt(args)
+    requested_model = args.model
+    resolved_model, model_warning = normalize_model_id(requested_model)
+    args.model = resolved_model
+    if model_warning:
+        print(f"[codex-guard] model fallback: {model_warning}", file=sys.stderr, flush=True)
     cmd = build_cmd(args)
     attempts: list[dict] = []
     state_path = Path(args.state_file).resolve()
@@ -150,28 +268,26 @@ def main() -> int:
         return 2
 
     for idx in range(1, max(args.retries, 1) + 1):
-        started = time.time()
         attempt = {
             "attempt": idx,
             "command": " ".join(shlex.quote(part) for part in cmd),
             "timeout_seconds": args.timeout,
+            "model_requested": requested_model,
+            "model_resolved": resolved_model,
+            "model_warning": model_warning,
         }
         try:
-            proc = subprocess.run(
-                cmd,
-                input=prompt,
-                text=True,
-                capture_output=True,
+            run_result = run_with_heartbeat(
+                cmd=cmd,
+                prompt=prompt,
                 timeout=args.timeout,
-                check=False,
+                heartbeat_interval=max(1, args.heartbeat_interval),
+                attempt_index=idx,
             )
-            attempt["exit_code"] = proc.returncode
-            attempt["duration_seconds"] = round(time.time() - started, 3)
-            attempt["stdout"] = proc.stdout
-            attempt["stderr"] = proc.stderr
+            attempt.update(run_result)
             attempts.append(attempt)
 
-            if proc.returncode == 0:
+            if int(run_result["exit_code"]) == 0:
                 mark_success(state_path, state, session_id)
                 print(
                     json.dumps(
@@ -181,26 +297,30 @@ def main() -> int:
                             "used_attempts": idx,
                             "session_id": session_id,
                             "consecutive_failures_before": previous_failures,
+                            "model_requested": requested_model,
+                            "model_resolved": resolved_model,
+                            "model_warning": model_warning,
                         },
                         ensure_ascii=False,
                     )
                 )
                 return 0
 
-            if idx < args.retries and is_retryable(proc.stderr, proc.stdout, proc.returncode):
+            if idx < args.retries and is_retryable(
+                str(run_result["stderr"]), str(run_result["stdout"]), int(run_result["exit_code"])
+            ):
                 time.sleep(args.backoff * idx)
                 continue
 
             break
-        except subprocess.TimeoutExpired as exc:
-            attempt["exit_code"] = 124
-            attempt["duration_seconds"] = round(time.time() - started, 3)
-            attempt["stdout"] = exc.stdout or ""
-            attempt["stderr"] = (exc.stderr or "") + "\nTIMEOUT"
+        except Exception as exc:
+            attempt["exit_code"] = 1
+            attempt["duration_seconds"] = 0
+            attempt["stdout"] = ""
+            attempt["stderr"] = str(exc)
+            attempt["heartbeats"] = 0
+            attempt["timed_out"] = False
             attempts.append(attempt)
-            if idx < args.retries:
-                time.sleep(args.backoff * idx)
-                continue
             break
 
     consecutive_failures = mark_failure(state_path, state, session_id)
@@ -213,6 +333,9 @@ def main() -> int:
                 "session_id": session_id,
                 "consecutive_failures": consecutive_failures,
                 "failure_budget": max(args.failure_budget, 1),
+                "model_requested": requested_model,
+                "model_resolved": resolved_model,
+                "model_warning": model_warning,
             },
             ensure_ascii=False,
         )

@@ -9,20 +9,26 @@ Goal:
 - avoid silent waits,
 - keep user informed with short progress updates,
 - do it without OpenClaw core modifications.
-- enforce heartbeat cadence from `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/HEARTBEAT.md`.
+- enforce heartbeat cadence from `${OPENCLAW_ROOT:-$HOME/.openclaw}/workspace-factory/HEARTBEAT.md`.
 
 Preferred flow:
 1. Preflight estimate:
    - announce expected duration and update plan in one short message.
 2. Async dispatch when feasible:
    - start long command in background:
-     - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_async_task.py start --task-id <id> --cmd "<command>" --cwd <path>`
+     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path>`
    - return `task_id` immediately.
 3. Status polling:
-   - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_async_task.py status --task-id <id>`
+   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" status --task-id <id> --stuck-threshold 300`
    - optional logs:
-     - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_async_task.py tail --task-id <id> --lines 40`
-4. Completion:
+     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 40`
+4. Watchdog (non-killing):
+   - if `status.task.stuck=true` (no log progress for threshold window), MUST send user warning immediately:
+     - what is still running,
+     - last log update timestamp / idle seconds,
+     - next checkpoint time.
+   - do NOT kill the task automatically just because it is long-running.
+5. Completion:
    - report final status (`completed`/`failed`) with exit code and next action.
 
 Fallback when async is not safe for this task:
