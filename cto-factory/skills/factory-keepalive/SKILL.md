@@ -19,10 +19,6 @@ Preferred flow:
      - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path> --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
    - if `CTO_SESSION_ID` is not exposed in env, provide explicit `--callback-session-id <current_session_id>`.
    - return `task_id` immediately.
-2a. Codex-specific guard:
-   - for `codex_guarded_exec.py`, prefer foreground run with built-in heartbeat (`[codex-guard] still running ...`).
-   - do NOT default to `background=true` for Codex runs.
-   - if tool returns `Command still running (session ...)`, switch into explicit `process poll` loop and keep user updates <=90s cadence until completion/failure.
 3. Status polling:
    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" status --task-id <id> --stuck-threshold 300`
    - optional logs:
@@ -36,6 +32,11 @@ Preferred flow:
 5. Completion:
    - callback path MUST wake CTO session on completion (success or failure),
    - report final status (`completed`/`failed`) with exit code and next action.
+
+Codex-specific guardrail (mandatory):
+- for `codex_guarded_exec.py`, prefer foreground run with built-in heartbeat (`[codex-guard] still running ...`).
+- DO NOT use raw `exec` with `background=true` for direct Codex guarded runs.
+- if tool returns `Command still running (session ...)`, switch into explicit `process poll` loop and keep user updates <=90s cadence until completion/failure.
 
 Fallback when async callback delivery is unavailable or unsafe for this task:
 - explicitly warn before blocking command:

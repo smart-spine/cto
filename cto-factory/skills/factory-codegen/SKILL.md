@@ -11,6 +11,8 @@ Rules:
 - preserve SecretRef credential objects,
 - avoid writing plaintext secrets.
 - if a codex run is expected to be long, send a short keep-alive pre-warning before dispatch.
+- for `codex_guarded_exec.py`, default execution mode MUST be foreground (do NOT set `background=true` in `exec` call).
+- if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure and post keepalive updates every <=90s.
 - treat any behavior mutation (including cron payload/prompt/config edits) as code/config work.
 - this skill is intended for generic code/config mutations. Do NOT use this skill for generating entirely new agents (use `factory-create-agent` for that).
 - when calling Codex include exact instruction: `Write Unit Tests & Verify, make changes in case of failures and revalidate. Repeat until success.`.
@@ -30,8 +32,6 @@ Rules:
 - do not run broad host diagnostics by default (`find $HOME`, `env | grep token|secret`) for regular coding tasks.
 - if task parses feed/web content, enforce sanitization and add tests for raw-markup suppression.
 - if delegation hangs or returns retryable transport errors, rerun via guarded wrapper with bounded retries and timeout.
-- for `codex_guarded_exec.py`, default execution mode MUST be foreground (do NOT set `background=true` in `exec` call).
-- if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure and post keepalive updates every <=90s.
 - `sessions_spawn`/`sessions_send` may be used only for black-box runtime checks against created agents, never for primary code generation.
 - never report success unless all expected output files exist and are non-empty.
 - for non-trivial tasks, you MUST enforce `PLAN -> IMPLEMENT -> AUDIT` codex loop.
@@ -56,10 +56,11 @@ Procedure for code tasks:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <requirements_json> --codex-output-file <plan_output_txt>`
    - if plan gate fails, send gap list back to Codex and rerun PLAN phase.
 5. IMPLEMENT phase delegation and include exact line: `Write Unit Tests & Verify`.
-   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}"; python3 "${OPENCLAW_ROOT}/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
+   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}"; python3 "${OPENCLAW_ROOT}/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
    Ensure `--workdir` strictly points to the ROOT project location.
+   - DO NOT pass `background=true` when executing this command.
+   - if tool still returns running session, switch to explicit process polling immediately.
    - NEVER combine inline env assignment with path expansion in the same token (invalid pattern: `OPENCLAW_ROOT=... python3 "$OPENCLAW_ROOT/..."`).
-   - if callback session id is empty, guarded wrapper auto-resolves latest session for callback delivery.
 6. Validate implementation report block:
    - codex response MUST include `CODEX_EXEC_REPORT_JSON_BEGIN/END`.
    - run:

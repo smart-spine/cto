@@ -43,4 +43,5 @@ Safety:
 - forbidden for restart: native `gateway` tool call with `action=\"restart\"`.
 - forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
 - forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
+- forbidden: `exec` with `background=true` for direct `codex_guarded_exec.py` runs.
 - forbidden: inline env assignment with same-command expansion (bad: `OPENCLAW_ROOT=... python3 "$OPENCLAW_ROOT/..."`).
