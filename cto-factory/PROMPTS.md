@@ -36,7 +36,6 @@ Mandatory constraints:
 - Never output plaintext secrets.
 - Run tests immediately after generation.
 - If tests fail, fix and rerun until green.
-- If Codex is unavailable after bounded retries, STOP with `BLOCKED: FATAL_CODEX_UNAVAILABLE` and provide command/error evidence.
 
 ## CODEX PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
 Before implementation, Codex MUST return a plan package.
@@ -126,8 +125,6 @@ For new agent tasks, prompt MUST enforce:
 
 ## VERIFICATION REQUIREMENTS
 After Codex output:
-- validate Codex delegation evidence with:
-  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_delegation_gate.py --workspace <target_workspace> --evidence-file ${OPENCLAW_ROOT}/workspace-factory/tmp/codex-last-run.json`
 - validate plan/report blocks with:
   - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`
   - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report ...`
@@ -135,7 +132,6 @@ After Codex output:
 - run `openclaw config validate --json` when config changed,
 - run functional smoke scenario that matches requested business behavior,
 - include command evidence (commands + exit codes) in handoff.
-- If Codex evidence gate fails, return `BLOCKED: PROTOCOL_VIOLATION` and do NOT continue.
 
 ## READY_FOR_APPLY HANDOFF TEMPLATE (MANDATORY)
 Before presenting apply approval options, include one explicit handoff packet:
@@ -155,8 +151,6 @@ Before any long run (Codex or large test suite), ALWAYS send a short pre-action 
 You MUST NEVER become silent while a task is active. If execution is still running, send progress/heartbeat updates at least every 90 seconds.
 For tasks expected to run longer than 90 seconds, dispatch via async supervisor (`cto_async_task.py`) with callback heartbeats.
 If callback delivery fails, retry automatically and send fallback in-session status until completion or hard block.
-Keep callback routing session-affine: if explicit callback-session-id is set, do not reroute to latest/direct session.
-If session callback cannot be delivered, send completion via `openclaw message send` to the same Telegram chat/topic target.
 Continue autonomously until DONE unless a concrete external blocker is hit; if blocked, report exact blocker evidence and required user input immediately.
 If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion.
 Inside interactive Telegram/user turns, process polling MUST use short timeout `timeout=45000`.

@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -74,7 +73,7 @@ def render_callback_message(template: str | None, context: dict) -> str:
     return rendered
 
 
-def load_agent_sessions(agent_id: str) -> list[dict]:
+def session_exists(agent_id: str, session_id: str) -> bool:
     try:
         proc = subprocess.run(
             ["openclaw", "sessions", "--agent", agent_id, "--json"],
@@ -84,92 +83,60 @@ def load_agent_sessions(agent_id: str) -> list[dict]:
             timeout=20,
         )
         if proc.returncode != 0:
-            return []
+            return False
         payload = json.loads(proc.stdout or "{}")
         sessions = payload.get("sessions") if isinstance(payload, dict) else None
         if not isinstance(sessions, list):
-            return []
-        return [item for item in sessions if isinstance(item, dict)]
+            return False
+        for item in sessions:
+            if isinstance(item, dict) and str(item.get("sessionId", "")).strip() == session_id:
+                return True
+        return False
     except Exception:
-        return []
-
-
-def session_record(agent_id: str, session_id: str) -> dict | None:
-    sid = normalize_optional(session_id)
-    if not sid:
-        return None
-    for item in load_agent_sessions(agent_id):
-        if normalize_optional(item.get("sessionId")) == sid:
-            return item
-    return None
-
-
-def session_exists(agent_id: str, session_id: str) -> bool:
-    return session_record(agent_id, session_id) is not None
+        return False
 
 
 def latest_session_id(agent_id: str) -> str | None:
     agent = normalize_optional(agent_id)
     if not agent:
         return None
-    sessions = load_agent_sessions(agent)
-    if not sessions:
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+        if proc.returncode != 0:
+            return None
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return None
+        ordered = sorted(
+            [item for item in sessions if isinstance(item, dict)],
+            key=lambda item: int(item.get("updatedAt") or 0),
+            reverse=True,
+        )
+        for item in ordered:
+            sid = normalize_optional(item.get("sessionId"))
+            if sid:
+                return sid
         return None
-    ordered = sorted(
-        sessions,
-        key=lambda item: int(item.get("updatedAt") or 0),
-        reverse=True,
-    )
-    for item in ordered:
-        sid = normalize_optional(item.get("sessionId"))
-        if sid:
-            return sid
-    return None
-
-
-_KEY_GROUP_TOPIC = re.compile(r":telegram:group:([^:]+):topic:([0-9]+)$")
-_KEY_GROUP = re.compile(r":telegram:group:([^:]+)$")
-_KEY_DIRECT = re.compile(r":telegram:direct:([^:]+)$")
-_KEY_SLASH = re.compile(r"^telegram:slash:([^:]+)$")
-
-
-def parse_telegram_target_from_session_key(key: str) -> str | None:
-    text = normalize_optional(key)
-    if not text:
+    except Exception:
         return None
-    for rx in (_KEY_GROUP_TOPIC, _KEY_GROUP, _KEY_DIRECT, _KEY_SLASH):
-        match = rx.search(text)
-        if not match:
-            continue
-        if rx is _KEY_GROUP_TOPIC:
-            return f"{match.group(1)}:topic:{match.group(2)}"
-        return match.group(1)
-    return None
-
-
-def resolve_callback_transport(agent_id: str, session_id: str) -> tuple[str | None, str | None]:
-    item = session_record(agent_id, session_id)
-    if not item:
-        return None, None
-    key = normalize_optional(item.get("key")) or ""
-    target = parse_telegram_target_from_session_key(key)
-    if target:
-        return "telegram", target
-    return None, None
 
 
 def send_session_callback(task: dict, template_override: str | None = None) -> dict:
     callback_agent_id = normalize_optional(task.get("callback_agent_id"))
     callback_session_id = normalize_optional(task.get("callback_session_id"))
-    callback_channel = normalize_optional(task.get("callback_channel"))
-    callback_target = normalize_optional(task.get("callback_target"))
     callback_message_template = normalize_optional(template_override) or normalize_optional(task.get("callback_message"))
-    callback_timeout = int(task.get("callback_timeout") or 3600)
+    callback_timeout = int(task.get("callback_timeout") or 120)
     callback_timeout = max(30, callback_timeout)
 
     agent_id = callback_agent_id or "cto-factory"
     session_id = callback_session_id
-    explicit_session = bool(callback_session_id)
     auto_resolved = False
     auto_reason = None
 
@@ -190,27 +157,9 @@ def send_session_callback(task: dict, template_override: str | None = None) -> d
             "reason": "callback_not_configured",
             "agent_id": agent_id,
             "session_id": session_id,
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
         }
 
-    if not callback_target:
-        resolved_channel, resolved_target = resolve_callback_transport(agent_id, session_id)
-        callback_channel = callback_channel or resolved_channel
-        callback_target = callback_target or resolved_target
-
     if not session_exists(agent_id, session_id):
-        if explicit_session:
-            return {
-                "enabled": True,
-                "sent": False,
-                "reason": "callback_session_not_found_strict",
-                "agent_id": agent_id,
-                "session_id": session_id,
-                "strict_session_affinity": True,
-                "callback_channel": callback_channel,
-                "callback_target": callback_target,
-            }
         fallback_session = latest_session_id(agent_id)
         if fallback_session and fallback_session != session_id and session_exists(agent_id, fallback_session):
             session_id = fallback_session
@@ -223,8 +172,6 @@ def send_session_callback(task: dict, template_override: str | None = None) -> d
                 "reason": "callback_session_not_found",
                 "agent_id": agent_id,
                 "session_id": session_id,
-                "callback_channel": callback_channel,
-                "callback_target": callback_target,
             }
 
     context = {
@@ -273,8 +220,6 @@ def send_session_callback(task: dict, template_override: str | None = None) -> d
             "sent_at": now_iso(),
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
         }
     except subprocess.TimeoutExpired as exc:
         return {
@@ -291,8 +236,6 @@ def send_session_callback(task: dict, template_override: str | None = None) -> d
             "reason": "callback_timeout_expired",
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
         }
     except Exception as exc:  # pragma: no cover - defensive branch
         return {
@@ -308,90 +251,6 @@ def send_session_callback(task: dict, template_override: str | None = None) -> d
             "sent_at": now_iso(),
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
-        }
-
-
-def send_transport_callback(task: dict, template_override: str | None = None) -> dict:
-    callback_channel = normalize_optional(task.get("callback_channel"))
-    callback_target = normalize_optional(task.get("callback_target"))
-    callback_timeout = int(task.get("callback_timeout") or 3600)
-    callback_timeout = max(30, callback_timeout)
-    if callback_target and not callback_channel:
-        callback_channel = "telegram"
-    if not callback_channel or not callback_target:
-        return {
-            "enabled": False,
-            "sent": False,
-            "reason": "transport_callback_not_configured",
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
-        }
-
-    context = {
-        "task_id": str(task.get("task_id", "")),
-        "status": str(task.get("status", "")),
-        "exit_code": task.get("exit_code"),
-        "log_file": str(task.get("log_file", "")),
-        "finished_at": str(task.get("finished_at", "")),
-        "heartbeat_index": task.get("heartbeat_index"),
-        "elapsed_seconds": task.get("elapsed_seconds"),
-    }
-    message = render_callback_message(template_override or normalize_optional(task.get("callback_message")), context)
-    cmd = [
-        "openclaw",
-        "message",
-        "send",
-        "--channel",
-        callback_channel,
-        "--target",
-        callback_target,
-        "--message",
-        message,
-        "--json",
-    ]
-    try:
-        exec_timeout = max(35, callback_timeout + 15)
-        proc = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=exec_timeout,
-        )
-        return {
-            "enabled": True,
-            "sent": proc.returncode == 0,
-            "exit_code": proc.returncode,
-            "stdout_preview": (proc.stdout or "")[:800],
-            "stderr_preview": (proc.stderr or "")[:800],
-            "sent_at": now_iso(),
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
-        }
-    except subprocess.TimeoutExpired as exc:
-        return {
-            "enabled": True,
-            "sent": False,
-            "exit_code": 124,
-            "stdout_preview": (exc.stdout or "")[:800],
-            "stderr_preview": "transport_callback_timeout_expired",
-            "reason": "transport_callback_timeout_expired",
-            "sent_at": now_iso(),
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
-        }
-    except Exception as exc:  # pragma: no cover - defensive branch
-        return {
-            "enabled": True,
-            "sent": False,
-            "exit_code": 1,
-            "stdout_preview": "",
-            "stderr_preview": str(exc),
-            "sent_at": now_iso(),
-            "callback_channel": callback_channel,
-            "callback_target": callback_target,
         }
 
 
@@ -430,12 +289,6 @@ def send_session_callback_with_retry(
     final["attempts"] = attempts
     final["attempts_count"] = len(attempts)
     final["sent"] = any(bool(item.get("sent")) for item in attempts)
-    if not final["sent"]:
-        transport = send_transport_callback(task, template_override=template_override)
-        final["transport_fallback"] = transport
-        if transport.get("sent"):
-            final["sent"] = True
-            final["reason"] = "transport_fallback_sent"
     return final
 
 
@@ -453,12 +306,6 @@ def cmd_start(args: argparse.Namespace) -> int:
     callback_agent_id = normalize_optional(args.callback_agent_id)
     if callback_session_id and not callback_agent_id:
         callback_agent_id = normalize_optional(os.getenv("CTO_AGENT_ID")) or "cto-factory"
-    callback_channel = normalize_optional(args.callback_channel) or normalize_optional(os.getenv("CTO_CALLBACK_CHANNEL"))
-    callback_target = normalize_optional(args.callback_target) or normalize_optional(os.getenv("CTO_CALLBACK_TARGET"))
-    if callback_session_id and not callback_target:
-        resolved_channel, resolved_target = resolve_callback_transport(callback_agent_id or "cto-factory", callback_session_id)
-        callback_channel = callback_channel or resolved_channel
-        callback_target = callback_target or resolved_target
 
     payload = {
         "task_id": args.task_id,
@@ -474,8 +321,6 @@ def cmd_start(args: argparse.Namespace) -> int:
         "log_file": str(log_path(args.task_id)),
         "callback_agent_id": callback_agent_id,
         "callback_session_id": callback_session_id,
-        "callback_channel": callback_channel,
-        "callback_target": callback_target,
         "callback_message": normalize_optional(args.callback_message),
         "callback_timeout": max(30, int(args.callback_timeout)),
         "heartbeat_seconds": max(30, int(args.heartbeat_seconds)),
@@ -506,10 +351,6 @@ def cmd_start(args: argparse.Namespace) -> int:
         spawn_cmd.extend(["--callback-agent-id", callback_agent_id])
     if callback_session_id:
         spawn_cmd.extend(["--callback-session-id", callback_session_id])
-    if callback_channel:
-        spawn_cmd.extend(["--callback-channel", callback_channel])
-    if callback_target:
-        spawn_cmd.extend(["--callback-target", callback_target])
     if normalize_optional(args.callback_message):
         spawn_cmd.extend(["--callback-message", normalize_optional(args.callback_message)])
     if normalize_optional(args.callback_progress_message):
@@ -547,10 +388,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             "log_file": str(log_path(args.task_id)),
             "callback_agent_id": normalize_optional(args.callback_agent_id) or current.get("callback_agent_id"),
             "callback_session_id": normalize_optional(args.callback_session_id) or current.get("callback_session_id"),
-            "callback_channel": normalize_optional(args.callback_channel) or current.get("callback_channel"),
-            "callback_target": normalize_optional(args.callback_target) or current.get("callback_target"),
             "callback_message": normalize_optional(args.callback_message) or current.get("callback_message"),
-            "callback_timeout": max(30, int(args.callback_timeout or current.get("callback_timeout") or 3600)),
+            "callback_timeout": max(30, int(args.callback_timeout or current.get("callback_timeout") or 120)),
             "heartbeat_seconds": max(30, int(args.heartbeat_seconds or current.get("heartbeat_seconds") or 90)),
             "callback_retries": max(1, int(args.callback_retries or current.get("callback_retries") or 3)),
             "callback_progress_message": normalize_optional(args.callback_progress_message)
@@ -724,10 +563,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--cwd", default=str(OPENCLAW_ROOT))
     p_start.add_argument("--callback-agent-id")
     p_start.add_argument("--callback-session-id")
-    p_start.add_argument("--callback-channel")
-    p_start.add_argument("--callback-target")
     p_start.add_argument("--callback-message")
-    p_start.add_argument("--callback-timeout", type=int, default=3600)
+    p_start.add_argument("--callback-timeout", type=int, default=120)
     p_start.add_argument("--heartbeat-seconds", type=int, default=90)
     p_start.add_argument("--callback-retries", type=int, default=3)
     p_start.add_argument("--callback-progress-message")
@@ -738,10 +575,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--cwd", default=str(OPENCLAW_ROOT))
     p_run.add_argument("--callback-agent-id")
     p_run.add_argument("--callback-session-id")
-    p_run.add_argument("--callback-channel")
-    p_run.add_argument("--callback-target")
     p_run.add_argument("--callback-message")
-    p_run.add_argument("--callback-timeout", type=int, default=3600)
+    p_run.add_argument("--callback-timeout", type=int, default=120)
     p_run.add_argument("--heartbeat-seconds", type=int, default=90)
     p_run.add_argument("--callback-retries", type=int, default=3)
     p_run.add_argument("--callback-progress-message")

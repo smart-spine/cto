@@ -17,10 +17,8 @@ Preferred flow:
    - announce expected duration and update plan in one short message.
 2. Async dispatch when the runtime can deliver callbacks safely:
    - start long command in background:
-     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path> --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-timeout 3600 --callback-channel telegram --callback-target <chat_or_topic_target> --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path> --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
    - if `CTO_SESSION_ID` is not exposed in env, provide explicit `--callback-session-id <current_session_id>`.
-   - callback MUST remain session-affine: no fallback to latest/direct session when explicit callback-session-id is provided.
-   - if session callback cannot be delivered, transport fallback MUST deliver to the same Telegram target.
    - return `task_id` immediately.
    - this is the DEFAULT path for any task expected to exceed 90 seconds.
 3. Status polling:

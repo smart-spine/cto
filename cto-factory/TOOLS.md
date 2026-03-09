@@ -23,7 +23,6 @@ Preferred command families:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_context_checkpoint.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_config_diff.py" ...`
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_codex_delegation_gate.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_agent_artifact_gate.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_qa_suite_v2.py" ...`

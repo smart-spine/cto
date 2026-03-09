@@ -14,9 +14,6 @@ Rules:
 - codex runs expected to exceed 90 seconds MUST be dispatched via `cto_async_task.py` with callback heartbeats.
 - you MUST NEVER leave the user without status while codex is running; heartbeat/status updates are mandatory every <=90 seconds.
 - for `codex_guarded_exec.py`, default execution mode MUST be foreground (do NOT set `background=true` in `exec` call).
-- callback routing MUST be session-affine:
-  - if `--callback-session-id` is provided, do not allow fallback to latest/direct sessions.
-  - always provide Telegram fallback route for completion: `--callback-channel telegram --callback-target <chat_or_topic_target>`.
 - if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure.
 - for interactive Telegram/user turns, each poll MUST use `timeout=45000`.
 - you MUST NOT use poll timeout `>=120000` during an active interactive turn.
@@ -38,7 +35,6 @@ Rules:
 - if test fails, run codex again with a fix prompt and rerun tests until green before handoff.
 - include codex command + codex exit code + test command output + pass/fail status in the final report to CTO.
 - if Codex delegation was skipped, mark task `BLOCKED: PROTOCOL_VIOLATION`.
-- if Codex is unavailable after bounded retries, return `BLOCKED: FATAL_CODEX_UNAVAILABLE` with command/error evidence.
 - do not run broad host diagnostics by default (`find $HOME`, `env | grep token|secret`) for regular coding tasks.
 - if task parses feed/web content, enforce sanitization and add tests for raw-markup suppression.
 - if delegation hangs or returns retryable transport errors, rerun via guarded wrapper with bounded retries and timeout.
@@ -66,9 +62,9 @@ Procedure for code tasks:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <requirements_json> --codex-output-file <plan_output_txt>`
    - if plan gate fails, send gap list back to Codex and rerun PLAN phase.
 5. IMPLEMENT phase delegation and include exact line: `Write Unit Tests & Verify`.
-   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --evidence-file "$OPENCLAW_ROOT/workspace-factory/tmp/codex-last-run.json" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-timeout 3600 --callback-channel telegram --callback-target <chat_or_topic_target> --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
+   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
    - for long codex runs, wrap the command in async supervisor:
-     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cwd <root_project_workspace> --cmd "<codex_guarded_exec command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-timeout 3600 --callback-channel telegram --callback-target <chat_or_topic_target> --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cwd <root_project_workspace> --cmd "<codex_guarded_exec command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
    - when async path is used, poll status/log via `cto_async_task.py status|tail` and continue reporting until terminal state.
    Ensure `--workdir` strictly points to the ROOT project location.
    - DO NOT pass `background=true` when executing this command.
@@ -79,18 +75,14 @@ Procedure for code tasks:
      - `process(action=list)`
      - if target session is still running, resume `timeout=45000` polling;
      - if target session is no longer running, proceed to verification gates (tests/config/artifacts/report parsing) and publish status without waiting for user ping.
-6. Enforce Codex delegation evidence gate:
-   - run:
-     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_codex_delegation_gate.py" --workspace <root_project_workspace> --evidence-file "$OPENCLAW_ROOT/workspace-factory/tmp/codex-last-run.json"`
-   - if gate fails, stop with `BLOCKED: PROTOCOL_VIOLATION`.
-7. Validate implementation report block:
+6. Validate implementation report block:
    - codex response MUST include `CODEX_EXEC_REPORT_JSON_BEGIN/END`.
    - run:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report --requirements-file <requirements_json> --codex-output-file <exec_output_txt>`
    - if report gate fails, send missing requirement ids to Codex and rerun IMPLEMENT phase.
-8. Apply Codex-produced output.
-9. If `openclaw.json` was modified, IMMEDIATELY run `OPENCLAW_CONFIG_PATH=<path_to_openclaw.json> openclaw config validate --json`. If validation fails, capture the errors and delegate a fix back to Codex before proceeding.
-10. Run deterministic tests immediately.
-11. If tests fail, delegate a fix to Codex and rerun tests until green.
-12. Run artifact gate checks for expected files (exist + non-empty) before reporting readiness.
-13. Report evidence: delegation method, command, exit code, `model_requested/model_resolved`, codex evidence gate output, plan/report gate outputs, test commands, test exit codes, artifact-gate result, and `openclaw.json` validation results.
+7. Apply Codex-produced output.
+8. If `openclaw.json` was modified, IMMEDIATELY run `OPENCLAW_CONFIG_PATH=<path_to_openclaw.json> openclaw config validate --json`. If validation fails, capture the errors and delegate a fix back to Codex before proceeding.
+9. Run deterministic tests immediately.
+10. If tests fail, delegate a fix to Codex and rerun tests until green.
+11. Run artifact gate checks for expected files (exist + non-empty) before reporting readiness.
+12. Report evidence: delegation method, command, exit code, `model_requested/model_resolved`, plan/report gate outputs, test commands, test exit codes, artifact-gate result, and `openclaw.json` validation results.

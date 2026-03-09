@@ -49,6 +49,9 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
      - in `buttons + commands` mode: menu MAY include one short fallback hint only (`Use /<cmd>`), not full command catalog,
      - text menu is allowed only as explicit fallback when button-send tool call fails.
    - callback payloads for `/menu` buttons MUST use `callback_data` with namespace `ux:<agent_id>:<action>`.
+   - canonical button-send shape for `/menu` (use this exact transport pattern; substitute target and callbacks):
+     - `openclaw message send --channel telegram --target <chat_id>:topic:<topic_id> --message "<agent name>, menu:" --buttons '[[{"text":"<label>","callback_data":"ux:<agent_id>:<action>"}]]' --json`
+   - `/menu` success acknowledgement SHOULD be one short line (`Menu sent.` or equivalent); no command catalog on success.
 
 5. Output/schema safety:
    - if business output requires specific fields (for example `Problem`, `Complaints`, `Where`, `Source URL`), encode this as explicit formatter contract,
@@ -84,6 +87,8 @@ Before `READY_FOR_APPLY`:
    - tests assert inline keyboard payload exists (`buttons` or `reply_markup.inline_keyboard`),
    - tests assert `/menu` path triggers button send transport (not plain text only),
    - tests assert callbacks route to real handlers.
+   - tests include one concrete command-shaped assertion for the button transport (`openclaw message send ... --buttons ...`).
+   - smoke evidence includes transport success payload (`ok: true`, `messageId`/provider id).
 6. For `COMPLEX_INTERACTIVE`:
    - tests MUST verify menu success output is buttons-only,
    - tests MUST verify at least two business actions are reachable via callbacks (without typing commands).

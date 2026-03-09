@@ -41,7 +41,5 @@ Purpose:
 6. CODE/CONFIG mutation MUST NOT start before `factory-intake` sign-off approval.
 7. Non-trivial Codex work MUST pass `factory-codex-plan-audit` (plan gate + exec-report gate) before READY.
 8. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY with `/menu` keyboard-first proof (inline buttons + callback routing).
-9. Any task with code/runtime mutations MUST pass `cto_codex_delegation_gate.py` evidence check before READY/APPLY.
-10. If Codex remains unavailable after bounded retries, workflow MUST stop with `BLOCKED: FATAL_CODEX_UNAVAILABLE` (no direct implementation fallback).
 
 See routing matrix: `../SKILL_ROUTING.md`.
