@@ -107,6 +107,7 @@ For new agent tasks, prompt MUST enforce:
   - `config/`, `tools/`, `tests/`, `skills/`
 - For interactive Telegram agents (buttons/menus/commands):
   - apply `factory-ux-designer` rules before coding command handlers,
+  - implement `/menu` as mandatory primary entry command,
   - avoid reserved command collisions,
   - include graceful interrupt command (`/cancel` or equivalent),
   - include callback/button safety checks in tests/smoke.
@@ -114,6 +115,7 @@ For new agent tasks, prompt MUST enforce:
   - for `COMPLEX_INTERACTIVE=YES`, do NOT implement command-catalog-driven UX as primary path.
   - if interaction mode is `buttons`, menu success response MUST be inline-keyboard only (no command list body).
   - if interaction mode is `buttons + commands`, menu success response MUST still be keyboard-first with only a short command hint.
+  - `/menu` runtime path MUST call message transport with inline keyboard payload (`buttons` or `reply_markup.inline_keyboard`) and namespaced callback_data.
 - Skill package minimum:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<name>/SKILL.md`
@@ -146,4 +148,9 @@ Guard rules:
 
 ## KEEP-ALIVE RULE
 Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
-If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion and post short progress updates at least every 90 seconds.
+If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion.
+Inside interactive Telegram/user turns, process polling MUST use short timeout `timeout=45000`.
+You MUST NOT block an interactive turn with poll timeouts `>=120000`.
+Long polls (`timeout=1200000`) are allowed only in detached async supervisor mode where the current user turn is already returned.
+Send one short progress note before each poll cycle and another note immediately after each poll result.
+If timeout/abort happens during polling, run recovery in-session (`process list` -> resume poll or finalize verification) and do not wait for user ping.

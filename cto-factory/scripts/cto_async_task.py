@@ -87,27 +87,82 @@ def session_exists(agent_id: str, session_id: str) -> bool:
         return False
 
 
+def latest_session_id(agent_id: str) -> str | None:
+    agent = normalize_optional(agent_id)
+    if not agent:
+        return None
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return None
+        ordered = sorted(
+            [item for item in sessions if isinstance(item, dict)],
+            key=lambda item: int(item.get("updatedAt") or 0),
+            reverse=True,
+        )
+        for item in ordered:
+            sid = normalize_optional(item.get("sessionId"))
+            if sid:
+                return sid
+        return None
+    except Exception:
+        return None
+
+
 def send_session_callback(task: dict) -> dict:
     callback_agent_id = normalize_optional(task.get("callback_agent_id"))
     callback_session_id = normalize_optional(task.get("callback_session_id"))
     callback_message_template = normalize_optional(task.get("callback_message"))
     callback_timeout = int(task.get("callback_timeout") or 120)
-    callback_timeout = max(15, callback_timeout)
+    callback_timeout = max(30, callback_timeout)
 
-    if not callback_agent_id or not callback_session_id:
+    agent_id = callback_agent_id or "cto-factory"
+    session_id = callback_session_id
+    auto_resolved = False
+    auto_reason = None
+
+    if not session_id:
+        session_id = (
+            normalize_optional(os.getenv("CTO_SESSION_ID"))
+            or normalize_optional(os.getenv("OPENCLAW_SESSION_ID"))
+            or latest_session_id(agent_id)
+        )
+        if session_id:
+            auto_resolved = True
+            auto_reason = "env_or_latest_session"
+
+    if not agent_id or not session_id:
         return {
             "enabled": False,
             "sent": False,
             "reason": "callback_not_configured",
+            "agent_id": agent_id,
+            "session_id": session_id,
         }
-    if not session_exists(callback_agent_id, callback_session_id):
-        return {
-            "enabled": True,
-            "sent": False,
-            "reason": "callback_session_not_found",
-            "agent_id": callback_agent_id,
-            "session_id": callback_session_id,
-        }
+
+    if not session_exists(agent_id, session_id):
+        fallback_session = latest_session_id(agent_id)
+        if fallback_session and fallback_session != session_id and session_exists(agent_id, fallback_session):
+            session_id = fallback_session
+            auto_resolved = True
+            auto_reason = "latest_session_fallback"
+        else:
+            return {
+                "enabled": True,
+                "sent": False,
+                "reason": "callback_session_not_found",
+                "agent_id": agent_id,
+                "session_id": session_id,
+            }
 
     context = {
         "task_id": str(task.get("task_id", "")),
@@ -121,9 +176,9 @@ def send_session_callback(task: dict) -> dict:
         "openclaw",
         "agent",
         "--agent",
-        callback_agent_id,
+        agent_id,
         "--session-id",
-        callback_session_id,
+        session_id,
         "--message",
         message,
         "--json",
@@ -141,27 +196,31 @@ def send_session_callback(task: dict) -> dict:
         return {
             "enabled": True,
             "sent": proc.returncode == 0,
-            "agent_id": callback_agent_id,
-            "session_id": callback_session_id,
+            "agent_id": agent_id,
+            "session_id": session_id,
             "timeout_seconds": callback_timeout,
             "exit_code": proc.returncode,
             "stdout_preview": (proc.stdout or "")[:800],
             "stderr_preview": (proc.stderr or "")[:800],
             "message": message,
             "sent_at": now_iso(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
         }
     except Exception as exc:  # pragma: no cover - defensive branch
         return {
             "enabled": True,
             "sent": False,
-            "agent_id": callback_agent_id,
-            "session_id": callback_session_id,
+            "agent_id": agent_id,
+            "session_id": session_id,
             "timeout_seconds": callback_timeout,
             "exit_code": 1,
             "stdout_preview": "",
             "stderr_preview": str(exc),
             "message": message,
             "sent_at": now_iso(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
         }
 
 
@@ -195,7 +254,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "callback_agent_id": callback_agent_id,
         "callback_session_id": callback_session_id,
         "callback_message": normalize_optional(args.callback_message),
-        "callback_timeout": max(15, int(args.callback_timeout)),
+        "callback_timeout": max(30, int(args.callback_timeout)),
         "callback": None,
     }
     write_state(args.task_id, payload)
@@ -211,7 +270,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "--cwd",
         args.cwd,
         "--callback-timeout",
-        str(max(15, int(args.callback_timeout))),
+        str(max(30, int(args.callback_timeout))),
     ]
     if callback_agent_id:
         spawn_cmd.extend(["--callback-agent-id", callback_agent_id])
@@ -253,7 +312,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             "callback_agent_id": normalize_optional(args.callback_agent_id) or current.get("callback_agent_id"),
             "callback_session_id": normalize_optional(args.callback_session_id) or current.get("callback_session_id"),
             "callback_message": normalize_optional(args.callback_message) or current.get("callback_message"),
-            "callback_timeout": max(15, int(args.callback_timeout or current.get("callback_timeout") or 120)),
+            "callback_timeout": max(30, int(args.callback_timeout or current.get("callback_timeout") or 120)),
         }
     )
     write_state(args.task_id, current)

@@ -32,7 +32,7 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 - required gate: run
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>"`
 - for interactive Telegram agents, required gate:
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>"`
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>" --menu-command /menu`
 
 `SKILL_INDEX.md` must include:
 - skill inventory,

@@ -29,6 +29,7 @@ Minimum extraction rules:
      - more than 5 primary user actions.
    - if `COMPLEX_INTERACTIVE=YES`, interaction mode MUST be `buttons` (button-first and button-led operation).
    - for `COMPLEX_INTERACTIVE=YES`, `commands only` MUST be rejected as `BLOCKED: UX_MODE_INVALID_FOR_COMPLEX_AGENT`.
+   - for interactive agents, `/menu` MUST be declared as primary entry command for UX navigation.
    - command text may exist only as fallback/diagnostic path when button send fails.
 4c. If the user gives vague replies (for example "just make it fast", "figure it out") and critical inputs remain missing:
    - ask again with a short required-fields list,

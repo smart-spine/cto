@@ -3,17 +3,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-def default_openclaw_home() -> Path:
-    return Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-
-
-DEFAULT_STATE_PATH = default_openclaw_home() / "workspace-factory/.cto-brain/runtime/pending-apply.json"
+DEFAULT_STATE_PATH = Path("/Users/uladzislaupraskou/.openclaw/workspace-factory/.cto-brain/runtime/pending-apply.json")
 
 
 def now_utc() -> datetime:

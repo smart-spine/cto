@@ -14,7 +14,6 @@ from typing import List
 
 
 LONG_TURN_TIMEOUT_SEC = 10800
-DEFAULT_OPENCLAW_HOME = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
 
 
 @dataclass
@@ -94,7 +93,7 @@ def sh(cmd: List[str], timeout: int = 180) -> subprocess.CompletedProcess[str]:
 
 
 def ask_cto(agent: str, session_id: str, message: str, timeout: int = LONG_TURN_TIMEOUT_SEC) -> str:
-    root = DEFAULT_OPENCLAW_HOME
+    root = Path("/Users/uladzislaupraskou/.openclaw")
     recipient = to_recipient_for_session(session_id)
     cleanup_log = ""
     proc = None
@@ -376,7 +375,7 @@ def run_transport_test(
 
     seen = find_marker_in_sessions(
         marker,
-        str(DEFAULT_OPENCLAW_HOME / "agents/cto-factory/sessions/*.jsonl"),
+        "/Users/uladzislaupraskou/.openclaw/agents/cto-factory/sessions/*.jsonl",
     )
     passed = ok_send and ok_relay and (f"{marker}-ACK" in cto_reply) and seen
     postmortem = (
@@ -524,7 +523,7 @@ def run_execution_test(agent: str) -> Report:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run CTO stress tests and generate strict markdown reports.")
-    parser.add_argument("--root", default=str(DEFAULT_OPENCLAW_HOME))
+    parser.add_argument("--root", default="/Users/uladzislaupraskou/.openclaw")
     parser.add_argument("--agent", default="cto-factory")
     parser.add_argument("--tester-token", required=True)
     parser.add_argument("--cto-token", required=True)

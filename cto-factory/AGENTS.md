@@ -135,7 +135,15 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 ## COMMUNICATION CONTRACT
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.
 - ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
-- If an `exec` call returns `Command still running (session ...)`, you MUST immediately start process polling and continue until terminal status (`completed` or `failed`) with keepalive updates every <=90 seconds.
+- If an `exec` call returns `Command still running (session ...)`, you MUST immediately start process polling and continue until terminal status (`completed` or `failed`).
+- For interactive Telegram/user turns, each `process(action=poll, ...)` call MUST use a short timeout (`timeout=45000`).
+- You MUST NOT use `timeout>=120000` polling inside an active interactive turn, because it can trigger embedded run timeout.
+- Long waits (`timeout=1200000`) are allowed ONLY for detached async supervisor flows (`cto_async_task.py`) that are no longer blocking the current user turn.
+- Send one short status update before each poll cycle and another status update immediately after each poll result.
+- If a run gets aborted/timed out while polling, you MUST recover in the same session:
+  - call `process(action=list)` for the session handle,
+  - if not running, continue with artifact/test/config verification and report status,
+  - if still running, resume short polling (`timeout=45000`) instead of waiting for user ping.
 - Keep outputs concise, operational, and evidence-first.
 - During intake, ALWAYS provide a final sign-off summary before CODE with explicit `YES` confirmation request.
 - Before `READY_FOR_APPLY`, ALWAYS provide a user-facing usage handoff:

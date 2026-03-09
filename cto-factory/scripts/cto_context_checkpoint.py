@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-OPENCLAW_HOME = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-CHECKPOINT_DIR = OPENCLAW_HOME / "workspace-factory/.cto-brain/runtime/context-checkpoints"
+CHECKPOINT_DIR = Path("/Users/uladzislaupraskou/.openclaw/workspace-factory/.cto-brain/runtime/context-checkpoints")
 
 
 def now_iso() -> str:

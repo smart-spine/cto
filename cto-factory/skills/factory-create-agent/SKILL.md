@@ -22,6 +22,7 @@ If agent has interactive Telegram UX (buttons/menus/custom commands):
 - interactive runtime handlers are MANDATORY (docs-only UX is invalid).
 - if intake marks `COMPLEX_INTERACTIVE=YES`, interaction mode MUST be `buttons`.
 - for `COMPLEX_INTERACTIVE=YES`, do NOT accept `commands only`; return `BLOCKED: UX_MODE_INVALID_FOR_COMPLEX_AGENT`.
+- interactive agents MUST expose `/menu` as primary entry command.
 
 ## REQUIRED STRUCTURE
 Resolve `OPENCLAW_ROOT` first (directory containing root `openclaw.json`).
@@ -64,8 +65,9 @@ Functional smoke MUST prove:
 - expected delivery path works when runtime prerequisites exist.
 - if interaction mode includes buttons, prove inline button delivery evidence (text fallback alone is not sufficient).
 - if interaction mode includes buttons, menu entry command MUST produce keyboard-first output (not plain command list) unless tool send fails.
+- if interaction mode includes buttons, `/menu` success path MUST call message transport with inline keyboard payload and namespaced callback_data.
 - if interaction mode includes buttons, interactive runtime gate is MANDATORY:
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_name>" --menu-command <menu_command> --callback-namespace <namespace>`
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_name>" --menu-command /menu --callback-namespace <namespace>`
 - if `COMPLEX_INTERACTIVE=YES`, smoke MUST include callback-driven usage proof:
   - trigger `/menu`,
   - execute at least two business actions through callbacks,

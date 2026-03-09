@@ -10,7 +10,7 @@ Apply only when:
 - for new-agent workflows: artifact gate passed with exit code `0` using
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_agent_artifact_gate.py" --root "$OPENCLAW_ROOT" --agent-id <agent_id> --require-binding`.
 - for interactive Telegram agents, interactive runtime gate passed with exit code `0`:
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>" --menu-command <menu_command> --callback-namespace <namespace>`.
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>" --menu-command /menu --callback-namespace <namespace>`.
 
 Pending apply state (mandatory):
 - Before presenting `A/B/C` options, persist pending state:

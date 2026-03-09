@@ -12,7 +12,11 @@ Rules:
 - avoid writing plaintext secrets.
 - if a codex run is expected to be long, send a short keep-alive pre-warning before dispatch.
 - for `codex_guarded_exec.py`, default execution mode MUST be foreground (do NOT set `background=true` in `exec` call).
-- if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure and post keepalive updates every <=90s.
+- if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure.
+- for interactive Telegram/user turns, each poll MUST use `timeout=45000`.
+- you MUST NOT use poll timeout `>=120000` during an active interactive turn.
+- send one status note before each poll cycle and one note after each poll result.
+- long polls (`timeout=1200000`) are allowed only when using detached async supervisor flow after the current user turn already returned.
 - treat any behavior mutation (including cron payload/prompt/config edits) as code/config work.
 - this skill is intended for generic code/config mutations. Do NOT use this skill for generating entirely new agents (use `factory-create-agent` for that).
 - when calling Codex include exact instruction: `Write Unit Tests & Verify, make changes in case of failures and revalidate. Repeat until success.`.
@@ -56,11 +60,16 @@ Procedure for code tasks:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <requirements_json> --codex-output-file <plan_output_txt>`
    - if plan gate fails, send gap list back to Codex and rerun PLAN phase.
 5. IMPLEMENT phase delegation and include exact line: `Write Unit Tests & Verify`.
-   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}"; python3 "${OPENCLAW_ROOT}/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
+   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
    Ensure `--workdir` strictly points to the ROOT project location.
    - DO NOT pass `background=true` when executing this command.
-   - if tool still returns running session, switch to explicit process polling immediately.
-   - NEVER combine inline env assignment with path expansion in the same token (invalid pattern: `OPENCLAW_ROOT=... python3 "$OPENCLAW_ROOT/..."`).
+   - if tool still returns running session, switch to explicit process polling immediately:
+     - `process(action=poll, sessionId=<running_session_id>, timeout=45000)`
+   - if poll returns still-running, continue polling with the same timeout until terminal status.
+   - if poll branch gets aborted/timed out, run recovery immediately:
+     - `process(action=list)`
+     - if target session is still running, resume `timeout=45000` polling;
+     - if target session is no longer running, proceed to verification gates (tests/config/artifacts/report parsing) and publish status without waiting for user ping.
 6. Validate implementation report block:
    - codex response MUST include `CODEX_EXEC_REPORT_JSON_BEGIN/END`.
    - run:

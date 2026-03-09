@@ -40,6 +40,6 @@ Purpose:
 5. Any major behavior change MUST pass `factory-test-agent` + `factory-smoke`.
 6. CODE/CONFIG mutation MUST NOT start before `factory-intake` sign-off approval.
 7. Non-trivial Codex work MUST pass `factory-codex-plan-audit` (plan gate + exec-report gate) before READY.
-8. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY.
+8. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY with `/menu` keyboard-first proof (inline buttons + callback routing).
 
 See routing matrix: `../SKILL_ROUTING.md`.

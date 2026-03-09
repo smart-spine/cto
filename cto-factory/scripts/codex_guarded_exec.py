@@ -191,7 +191,6 @@ def latest_session_id(agent_id: str) -> str | None:
         sessions = payload.get("sessions") if isinstance(payload, dict) else None
         if not isinstance(sessions, list):
             return None
-        # Prefer most recently updated if metadata exists.
         ordered = sorted(
             [item for item in sessions if isinstance(item, dict)],
             key=lambda item: int(item.get("updatedAt") or 0),
@@ -218,7 +217,6 @@ def send_callback(
     session_id = normalize_optional(callback_session_id)
     auto_resolved = False
     auto_reason = None
-
     if not session_id:
         session_id = (
             normalize_optional(os.getenv("CTO_SESSION_ID"))
@@ -228,7 +226,6 @@ def send_callback(
         if session_id:
             auto_resolved = True
             auto_reason = "env_or_latest_session"
-
     if not agent_id or not session_id:
         return {
             "enabled": False,
@@ -238,7 +235,6 @@ def send_callback(
             "session_id": session_id,
         }
     if not session_exists(agent_id, session_id):
-        # Session id can rotate; try one fallback lookup before giving up.
         fallback_session = latest_session_id(agent_id)
         if fallback_session and fallback_session != session_id and session_exists(agent_id, fallback_session):
             session_id = fallback_session
@@ -253,6 +249,7 @@ def send_callback(
                 "session_id": session_id,
             }
 
+    callback_timeout = max(30, callback_timeout)
     message = render_callback_message(callback_message_template, context)
     cmd = [
         "openclaw",
@@ -265,7 +262,7 @@ def send_callback(
         message,
         "--json",
         "--timeout",
-        str(max(15, callback_timeout)),
+        str(callback_timeout),
     ]
     try:
         proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
@@ -274,7 +271,7 @@ def send_callback(
             "sent": proc.returncode == 0,
             "agent_id": agent_id,
             "session_id": session_id,
-            "timeout_seconds": max(15, callback_timeout),
+            "timeout_seconds": callback_timeout,
             "exit_code": proc.returncode,
             "stdout_preview": (proc.stdout or "")[:800],
             "stderr_preview": (proc.stderr or "")[:800],
@@ -289,12 +286,14 @@ def send_callback(
             "sent": False,
             "agent_id": agent_id,
             "session_id": session_id,
-            "timeout_seconds": max(15, callback_timeout),
+            "timeout_seconds": callback_timeout,
             "exit_code": 1,
             "stdout_preview": "",
             "stderr_preview": str(exc),
             "message": message,
             "sent_at": utc_now(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
         }
 
 

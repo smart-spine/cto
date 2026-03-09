@@ -14,7 +14,7 @@ Preferred command families:
 - `openclaw gateway *`
 - `openclaw system event --mode now --text "..."`
 - `openclaw message send --channel telegram --target <chat>:topic:<topic> --message "..."`
-- `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}"; python3 "${OPENCLAW_ROOT}/workspace-factory/scripts/codex_guarded_exec.py" ...` (primary path for code mutations)
+- `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" ...` (primary path for code mutations)
 - `git` (backup/rollback)
 - `node`, `python3`, `jq`
 - `sessions_send` / `sessions_spawn` for multi-agent coordination and black-box testing of created agents
@@ -44,4 +44,3 @@ Safety:
 - forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
 - forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
 - forbidden: `exec` with `background=true` for direct `codex_guarded_exec.py` runs.
-- forbidden: inline env assignment with same-command expansion (bad: `OPENCLAW_ROOT=... python3 "$OPENCLAW_ROOT/..."`).

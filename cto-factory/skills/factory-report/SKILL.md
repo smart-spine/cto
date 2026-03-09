@@ -32,7 +32,7 @@ Always include in the evidence appendix:
 - include command, exit code, and pass/fail summary lines,
 - for interactive Telegram agents (buttons/menus):
   - include interactive gate evidence from:
-    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace <agent_workspace> --menu-command <menu_command> --callback-namespace <namespace>`
+    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace <agent_workspace> --menu-command /menu --callback-namespace <namespace>`
   - include command, exit code, and missing-runtime/missing-test findings if failed,
 - for non-trivial Codex tasks: codex plan/report gate evidence from
   - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`,

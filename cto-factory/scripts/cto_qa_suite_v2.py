@@ -14,9 +14,6 @@ from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 
 
-DEFAULT_OPENCLAW_HOME = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-
-
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -315,7 +312,7 @@ def run_session(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Extended QA suite for CTO Factory")
-    ap.add_argument("--workdir", default=str(DEFAULT_OPENCLAW_HOME))
+    ap.add_argument("--workdir", default="/Users/uladzislaupraskou/.openclaw")
     ap.add_argument("--agent", default="cto-factory")
     ap.add_argument("--out-dir", default="")
     ap.add_argument("--turn-timeout-sec", type=int, default=10800)

@@ -15,7 +15,7 @@ from typing import Callable, List
 
 
 CHAT_ID = "-1003633569118"
-OPENCLAW_ROOT = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
+OPENCLAW_ROOT = Path("/Users/uladzislaupraskou/.openclaw")
 # Watchdog timeout for each openclaw-agent turn to avoid indefinite CLI hangs.
 # This is separate from Codex internal timeout handling.
 AGENT_TURN_TIMEOUT_SEC = 10800

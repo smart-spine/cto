@@ -36,7 +36,11 @@ Preferred flow:
 Codex-specific guardrail (mandatory):
 - for `codex_guarded_exec.py`, prefer foreground run with built-in heartbeat (`[codex-guard] still running ...`).
 - DO NOT use raw `exec` with `background=true` for direct Codex guarded runs.
-- if tool returns `Command still running (session ...)`, switch into explicit `process poll` loop and keep user updates <=90s cadence until completion/failure.
+- if tool returns `Command still running (session ...)` during an interactive turn, switch into explicit `process poll` loop with `timeout=45000` until completion/failure.
+- do NOT use poll timeout `>=120000` in interactive turns.
+- long polls are allowed only in detached async supervisor mode, not while holding current user turn.
+- send one status note before each poll call and one status note immediately after each poll result.
+- callback timeout for background completion signals SHOULD be >= 90 seconds; NEVER set callback timeout below 30 seconds.
 
 Fallback when async callback delivery is unavailable or unsafe for this task:
 - explicitly warn before blocking command:
@@ -51,6 +55,5 @@ Heartbeat cadence (mandatory while task is running):
 Hard constraints:
 - do not rely on engine-level streaming changes,
 - require `OPENCLAW_ROOT` to be resolved/exported before using helper scripts,
-- avoid invalid shell pattern where env var is assigned inline and expanded in same command (`VAR=... cmd "$VAR/path"`),
 - do not claim periodic push updates if runtime cannot send them,
 - keep updates short and concrete.
