@@ -12,9 +12,13 @@ Create a fully runnable agent for the requested business use-case, not a scaffol
 - behavior and trigger policy,
 - failure/retry policy,
 - model preference,
-- secrets plan (SecretRef only).
+- secrets plan (SecretRef only),
+- interaction mode (`commands only`, `buttons`, or `buttons + commands`) when UI is interactive.
 
 If critical inputs are missing, return `BLOCKED: MISSING_CRITICAL_INPUTS`.
+
+If agent has interactive Telegram UX (buttons/menus/custom commands):
+- `factory-ux-designer` is MANDATORY before CODE.
 
 ## REQUIRED STRUCTURE
 Resolve `OPENCLAW_ROOT` first (directory containing root `openclaw.json`).

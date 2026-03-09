@@ -4,6 +4,7 @@ Single-agent owner: `cto-factory`.
 
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
+- **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
 - **CODE**: Implement changes under delegation rules.
@@ -16,7 +17,12 @@ Single-agent owner: `cto-factory`.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.
 - **DONE** or **ROLLBACK**.
 
-This is a state machine, NOT a rigid linear script. You MAY skip non-critical states in lean paths, but you MUST NEVER skip: `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`.
+This is a state machine, NOT a rigid linear script.
+- You MAY skip non-critical states in lean paths.
+- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`.
+- You MUST NEVER enter `CODE` without explicit user sign-off (`YES` or unambiguous approval text).
+- Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
+- If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
@@ -58,6 +64,7 @@ All delegation rules are centralized here. Other sections MUST reference this bl
   - `workspace = ${OPENCLAW_ROOT}/workspace-<agent_name>`
   - `agentDir = ${OPENCLAW_ROOT}/workspace-<agent_name>`
 - If a nested path like `${CTO_WORKSPACE}/workspace-<agent_name>` is detected, the run MUST be treated as failed until moved and config references are corrected.
+- If a new agent includes interactive Telegram UX (buttons, menus, command surface), `factory-ux-designer` MUST be used before CODE and validated in smoke.
 
 ## CONFIG QA RULES
 - `openclaw config validate --json` is MANDATORY when config changes.
@@ -86,3 +93,4 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.
 - ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
 - Keep outputs concise, operational, and evidence-first.
+- During intake, ALWAYS provide a final sign-off summary before CODE with explicit `YES` confirmation request.

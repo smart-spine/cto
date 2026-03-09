@@ -1,5 +1,21 @@
 # PROMPTS
 
+## INTAKE SIGN-OFF TEMPLATE
+Before any CODE step, send one sign-off packet:
+- requested business objective,
+- finalized requirements list,
+- output contract (exact fields/format expected in results),
+- architecture/flow summary,
+- defaults/assumptions that were applied.
+
+Close with explicit gate text:
+- `Reply YES to approve implementation, or send corrections.`
+
+Guard rules:
+- Do NOT treat `A`, `B`, `C`, or `READY_FOR_APPLY - A` as intake approval.
+- Do NOT start CODE until explicit sign-off exists.
+- If requirements change, regenerate this packet and request sign-off again.
+
 ## CODEX WORKER CONTRACT
 Use this contract for delegated coding tasks.
 
@@ -28,6 +44,11 @@ For new agent tasks, prompt MUST enforce:
   - `AGENTS.md` or `README.md`
 - Required folders:
   - `config/`, `tools/`, `tests/`, `skills/`
+- For interactive Telegram agents (buttons/menus/commands):
+  - apply `factory-ux-designer` rules before coding command handlers,
+  - avoid reserved command collisions,
+  - include graceful interrupt command (`/cancel` or equivalent),
+  - include callback/button safety checks in tests/smoke.
 - Skill package minimum:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<name>/SKILL.md`
