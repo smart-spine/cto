@@ -23,6 +23,7 @@ CTO_SEED_DIR="${CTO_SEED_DIR:-${CTO_REPO_ROOT}/cto-factory}"
 DEPLOY_MANIFEST="${DEPLOY_MANIFEST:-${CTO_SEED_DIR}/DEPLOY_MANIFEST.txt}"
 CTO_REPO_REF="${CTO_REPO_REF:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-1200}"
 UPDATE_REPO="${UPDATE_REPO:-true}"
 FORCE_MODEL_UPDATE="${FORCE_MODEL_UPDATE:-false}"
 RESTART_GATEWAY="${RESTART_GATEWAY:-true}"
@@ -193,7 +194,7 @@ PY
 
 upsert_cto_agent_config() {
   backup_file "${OPENCLAW_CONFIG_PATH}"
-  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" <<'PY'
+  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" <<'PY'
 import json
 import pathlib
 import sys
@@ -202,6 +203,7 @@ config_path = pathlib.Path(sys.argv[1])
 openclaw_home = pathlib.Path(sys.argv[2])
 cto_model = sys.argv[3]
 force_model_update = (sys.argv[4].strip().lower() == "true")
+agent_timeout_seconds = int(sys.argv[5])
 
 data = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -209,6 +211,8 @@ agents = data.setdefault("agents", {})
 if isinstance(agents, list):
     agents = {"list": agents}
     data["agents"] = agents
+defaults = agents.setdefault("defaults", {})
+defaults["timeoutSeconds"] = agent_timeout_seconds
 
 agent_list = agents.setdefault("list", [])
 existing = None

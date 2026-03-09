@@ -20,6 +20,7 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
 CTO_SEED_DIR="${CTO_SEED_DIR:-${SCRIPT_DIR}/../cto-factory}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-1200}"
 SKIP_CTO_HEALTH_SMOKE="${SKIP_CTO_HEALTH_SMOKE:-false}"
 BIND_DIRECT_USER_ID="${BIND_DIRECT_USER_ID:-}"
 TELEGRAM_ALLOWED_USER_ID="${TELEGRAM_ALLOWED_USER_ID:-}"
@@ -93,7 +94,7 @@ PY
 upsert_cto_agent_config() {
   local config_path="${OPENCLAW_CONFIG_PATH}"
   backup_file "${config_path}"
-  python3 - "${config_path}" "${OPENCLAW_HOME}" "${CTO_MODEL}" <<'PY'
+  python3 - "${config_path}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" <<'PY'
 import json
 import pathlib
 import sys
@@ -101,6 +102,7 @@ import sys
 config_path = pathlib.Path(sys.argv[1])
 openclaw_home = pathlib.Path(sys.argv[2])
 cto_model = sys.argv[3]
+agent_timeout_seconds = int(sys.argv[4])
 
 data = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -108,6 +110,8 @@ agents = data.setdefault("agents", {})
 if isinstance(agents, list):
     agents = {"list": agents}
     data["agents"] = agents
+defaults = agents.setdefault("defaults", {})
+defaults["timeoutSeconds"] = agent_timeout_seconds
 
 agent_list = agents.setdefault("list", [])
 cto_payload = {

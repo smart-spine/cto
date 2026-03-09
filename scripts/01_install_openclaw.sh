@@ -18,6 +18,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_PORT="${OPENCLAW_PORT:-18789}"
+OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-1200}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
@@ -204,7 +205,7 @@ ensure_openclaw_config() {
   local config_path="${OPENCLAW_HOME}/openclaw.json"
   ensure_dir "${OPENCLAW_HOME}"
   backup_file "${config_path}"
-  python3 - "${config_path}" "${OPENCLAW_HOME}" "${OPENCLAW_PORT}" "${OPENCLAW_GATEWAY_TOKEN}" <<'PY'
+  python3 - "${config_path}" "${OPENCLAW_HOME}" "${OPENCLAW_PORT}" "${OPENCLAW_GATEWAY_TOKEN}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" <<'PY'
 import json
 import pathlib
 import sys
@@ -213,6 +214,7 @@ config_path = pathlib.Path(sys.argv[1])
 openclaw_home = pathlib.Path(sys.argv[2])
 port = int(sys.argv[3])
 gateway_token = sys.argv[4]
+agent_timeout_seconds = int(sys.argv[5])
 
 if config_path.exists():
     data = json.loads(config_path.read_text(encoding="utf-8"))
@@ -247,6 +249,7 @@ if not isinstance(default_model, dict):
     defaults["model"] = {"primary": "openai/gpt-5.2"}
 else:
     default_model.setdefault("primary", "openai/gpt-5.2")
+defaults["timeoutSeconds"] = agent_timeout_seconds
 
 agent_list = agents.setdefault("list", [])
 main_agent = None
