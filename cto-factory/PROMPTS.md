@@ -146,3 +146,4 @@ Guard rules:
 
 ## KEEP-ALIVE RULE
 Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
+If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion and post short progress updates at least every 90 seconds.

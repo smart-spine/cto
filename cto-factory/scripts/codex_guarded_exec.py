@@ -41,8 +41,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--failure-budget", type=int, default=3, help="Consecutive failed runs allowed per session")
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
     p.add_argument("--state-file", default=str(default_state), help="Path to persistent failure counter JSON")
-    p.add_argument("--callback-agent-id", help="Agent id to wake after command completion")
-    p.add_argument("--callback-session-id", help="Session id to wake after command completion")
+    p.add_argument(
+        "--callback-agent-id",
+        default=os.getenv("CTO_AGENT_ID"),
+        help="Agent id to wake after command completion",
+    )
+    p.add_argument(
+        "--callback-session-id",
+        default=os.getenv("CTO_SESSION_ID") or os.getenv("OPENCLAW_SESSION_ID"),
+        help="Session id to wake after command completion",
+    )
     p.add_argument("--callback-timeout", type=int, default=120, help="Timeout for callback command (seconds)")
     p.add_argument(
         "--callback-message",
@@ -166,6 +174,38 @@ def session_exists(agent_id: str, session_id: str) -> bool:
         return False
 
 
+def latest_session_id(agent_id: str) -> str | None:
+    agent = normalize_optional(agent_id)
+    if not agent:
+        return None
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return None
+        # Prefer most recently updated if metadata exists.
+        ordered = sorted(
+            [item for item in sessions if isinstance(item, dict)],
+            key=lambda item: int(item.get("updatedAt") or 0),
+            reverse=True,
+        )
+        for item in ordered:
+            sid = normalize_optional(item.get("sessionId"))
+            if sid:
+                return sid
+        return None
+    except Exception:
+        return None
+
+
 def send_callback(
     *,
     callback_agent_id: str | None,
@@ -174,18 +214,44 @@ def send_callback(
     callback_message_template: str | None,
     context: dict,
 ) -> dict:
-    agent_id = normalize_optional(callback_agent_id)
+    agent_id = normalize_optional(callback_agent_id) or "cto-factory"
     session_id = normalize_optional(callback_session_id)
+    auto_resolved = False
+    auto_reason = None
+
+    if not session_id:
+        session_id = (
+            normalize_optional(os.getenv("CTO_SESSION_ID"))
+            or normalize_optional(os.getenv("OPENCLAW_SESSION_ID"))
+            or latest_session_id(agent_id)
+        )
+        if session_id:
+            auto_resolved = True
+            auto_reason = "env_or_latest_session"
+
     if not agent_id or not session_id:
-        return {"enabled": False, "sent": False, "reason": "callback_not_configured"}
-    if not session_exists(agent_id, session_id):
         return {
-            "enabled": True,
+            "enabled": False,
             "sent": False,
-            "reason": "callback_session_not_found",
+            "reason": "callback_not_configured",
             "agent_id": agent_id,
             "session_id": session_id,
         }
+    if not session_exists(agent_id, session_id):
+        # Session id can rotate; try one fallback lookup before giving up.
+        fallback_session = latest_session_id(agent_id)
+        if fallback_session and fallback_session != session_id and session_exists(agent_id, fallback_session):
+            session_id = fallback_session
+            auto_resolved = True
+            auto_reason = "latest_session_fallback"
+        else:
+            return {
+                "enabled": True,
+                "sent": False,
+                "reason": "callback_session_not_found",
+                "agent_id": agent_id,
+                "session_id": session_id,
+            }
 
     message = render_callback_message(callback_message_template, context)
     cmd = [
@@ -214,6 +280,8 @@ def send_callback(
             "stderr_preview": (proc.stderr or "")[:800],
             "message": message,
             "sent_at": utc_now(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
         }
     except Exception as exc:  # pragma: no cover - defensive branch
         return {

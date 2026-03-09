@@ -135,6 +135,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 ## COMMUNICATION CONTRACT
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.
 - ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
+- If an `exec` call returns `Command still running (session ...)`, you MUST poll that process to completion/failure and send periodic keepalive updates (<=90s cadence).
 - Keep outputs concise, operational, and evidence-first.
 - During intake, ALWAYS provide a final sign-off summary before CODE with explicit `YES` confirmation request.
 - Before `READY_FOR_APPLY`, ALWAYS provide a user-facing usage handoff:
