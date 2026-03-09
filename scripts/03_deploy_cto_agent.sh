@@ -19,12 +19,32 @@ source "${SCRIPT_DIR}/lib/common.sh"
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
 CTO_SEED_DIR="${CTO_SEED_DIR:-${SCRIPT_DIR}/../cto-factory}"
+DEPLOY_MANIFEST="${DEPLOY_MANIFEST:-${CTO_SEED_DIR}/DEPLOY_MANIFEST.txt}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-1200}"
 SKIP_CTO_HEALTH_SMOKE="${SKIP_CTO_HEALTH_SMOKE:-false}"
 BIND_DIRECT_USER_ID="${BIND_DIRECT_USER_ID:-}"
 TELEGRAM_ALLOWED_USER_ID="${TELEGRAM_ALLOWED_USER_ID:-}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
+
+verify_manifest_paths() {
+  local root="$1"
+  local label="$2"
+  local missing=0
+  local rel=""
+
+  while IFS= read -r rel; do
+    [[ -n "${rel}" ]] || continue
+    if [[ ! -e "${root}/${rel}" ]]; then
+      log_error "Missing required path in ${label}: ${root}/${rel}"
+      missing=$((missing + 1))
+    fi
+  done < <(awk '!/^[[:space:]]*(#|$)/{print}' "${DEPLOY_MANIFEST}")
+
+  if (( missing > 0 )); then
+    die "Manifest verification failed for ${label}: ${missing} paths missing."
+  fi
+}
 
 sync_cto_workspace() {
   local source_workspace="${CTO_SEED_DIR}"
@@ -36,6 +56,8 @@ sync_cto_workspace() {
   if [[ -d "${target_workspace}/.cto-brain" ]]; then
     target_has_memory="true"
   fi
+
+  verify_manifest_paths "${source_workspace}" "seed"
 
   log_info "Syncing workspace-factory files."
   rsync -a --delete --exclude '.cto-brain/' "${source_workspace}/" "${target_workspace}/"
@@ -52,6 +74,8 @@ sync_cto_workspace() {
   else
     log_warn "Source repository does not contain .cto-brain (git-ignored). Existing target memory was preserved."
   fi
+
+  verify_manifest_paths "${target_workspace}" "target"
 }
 
 rewrite_hardcoded_paths() {
@@ -67,7 +91,7 @@ needles = [
     "/Users/uladzislaupraskou/.openclaw",
     "/home/ubuntu/.openclaw",
 ]
-extensions = {".md", ".sh", ".txt", ".json", ".yaml", ".yml"}
+extensions = {".md", ".sh", ".py", ".txt", ".json", ".yaml", ".yml", ".toml"}
 updated = 0
 
 for path in root.rglob("*"):
@@ -286,6 +310,7 @@ main() {
   require_cmd openclaw
   require_cmd codex
 
+  [[ -f "${DEPLOY_MANIFEST}" ]] || die "Missing deploy manifest: ${DEPLOY_MANIFEST}"
   [[ -f "${OPENCLAW_CONFIG_PATH}" ]] || die "Missing ${OPENCLAW_CONFIG_PATH}. Run Script 1 first."
 
   log_info "Stage 1/5: Syncing CTO workspace files."
