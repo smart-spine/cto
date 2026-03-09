@@ -148,6 +148,10 @@ Guard rules:
 
 ## KEEP-ALIVE RULE
 Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
+You MUST NEVER become silent while a task is active. If execution is still running, send progress/heartbeat updates at least every 90 seconds.
+For tasks expected to run longer than 90 seconds, dispatch via async supervisor (`cto_async_task.py`) with callback heartbeats.
+If callback delivery fails, retry automatically and send fallback in-session status until completion or hard block.
+Continue autonomously until DONE unless a concrete external blocker is hit; if blocked, report exact blocker evidence and required user input immediately.
 If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion.
 Inside interactive Telegram/user turns, process polling MUST use short timeout `timeout=45000`.
 You MUST NOT block an interactive turn with poll timeouts `>=120000`.

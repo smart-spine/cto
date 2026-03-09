@@ -11,6 +11,8 @@ Rules:
 - preserve SecretRef credential objects,
 - avoid writing plaintext secrets.
 - if a codex run is expected to be long, send a short keep-alive pre-warning before dispatch.
+- codex runs expected to exceed 90 seconds MUST be dispatched via `cto_async_task.py` with callback heartbeats.
+- you MUST NEVER leave the user without status while codex is running; heartbeat/status updates are mandatory every <=90 seconds.
 - for `codex_guarded_exec.py`, default execution mode MUST be foreground (do NOT set `background=true` in `exec` call).
 - if runtime returns `Command still running (session ...)`, you MUST immediately enter a `process poll` loop until completion/failure.
 - for interactive Telegram/user turns, each poll MUST use `timeout=45000`.
@@ -61,6 +63,9 @@ Procedure for code tasks:
    - if plan gate fails, send gap list back to Codex and rerun PLAN phase.
 5. IMPLEMENT phase delegation and include exact line: `Write Unit Tests & Verify`.
    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
+   - for long codex runs, wrap the command in async supervisor:
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cwd <root_project_workspace> --cmd "<codex_guarded_exec command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+   - when async path is used, poll status/log via `cto_async_task.py status|tail` and continue reporting until terminal state.
    Ensure `--workdir` strictly points to the ROOT project location.
    - DO NOT pass `background=true` when executing this command.
    - if tool still returns running session, switch to explicit process polling immediately:

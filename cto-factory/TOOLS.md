@@ -44,3 +44,4 @@ Safety:
 - forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
 - forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
 - forbidden: `exec` with `background=true` for direct `codex_guarded_exec.py` runs.
+- for codex executions expected to exceed 90s, preferred path is `cto_async_task.py start ... --cmd "<codex_guarded_exec ...>"` with heartbeat callbacks.

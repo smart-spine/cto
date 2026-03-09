@@ -159,6 +159,7 @@ def session_exists(agent_id: str, session_id: str) -> bool:
             text=True,
             capture_output=True,
             check=False,
+            timeout=20,
         )
         if proc.returncode != 0:
             return False
@@ -184,6 +185,7 @@ def latest_session_id(agent_id: str) -> str | None:
             text=True,
             capture_output=True,
             check=False,
+            timeout=20,
         )
         if proc.returncode != 0:
             return None
@@ -265,7 +267,8 @@ def send_callback(
         str(callback_timeout),
     ]
     try:
-        proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        exec_timeout = max(35, callback_timeout + 15)
+        proc = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=exec_timeout)
         return {
             "enabled": True,
             "sent": proc.returncode == 0,
@@ -277,6 +280,22 @@ def send_callback(
             "stderr_preview": (proc.stderr or "")[:800],
             "message": message,
             "sent_at": utc_now(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "enabled": True,
+            "sent": False,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "timeout_seconds": callback_timeout,
+            "exit_code": 124,
+            "stdout_preview": (exc.stdout or "")[:800],
+            "stderr_preview": "callback_timeout_expired",
+            "message": message,
+            "sent_at": utc_now(),
+            "reason": "callback_timeout_expired",
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
         }

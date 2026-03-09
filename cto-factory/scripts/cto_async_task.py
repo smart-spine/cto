@@ -52,11 +52,19 @@ class _SafeFormatDict(dict):
 
 
 def render_callback_message(template: str | None, context: dict) -> str:
-    default_template = (
-        "ASYNC_TASK_COMPLETE "
-        "task_id={task_id} status={status} exit_code={exit_code}. "
-        "Log: {log_file}"
-    )
+    status = str(context.get("status", "")).strip().lower()
+    if status == "running":
+        default_template = (
+            "ASYNC_TASK_HEARTBEAT "
+            "task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}. "
+            "Log: {log_file}. Continue the task and report progress to user."
+        )
+    else:
+        default_template = (
+            "ASYNC_TASK_COMPLETE "
+            "task_id={task_id} status={status} exit_code={exit_code}. "
+            "Log: {log_file}. Continue workflow; do not wait for user ping."
+        )
     text = template or default_template
     try:
         rendered = text.format_map(_SafeFormatDict(context))
@@ -72,6 +80,7 @@ def session_exists(agent_id: str, session_id: str) -> bool:
             text=True,
             capture_output=True,
             check=False,
+            timeout=20,
         )
         if proc.returncode != 0:
             return False
@@ -97,6 +106,7 @@ def latest_session_id(agent_id: str) -> str | None:
             text=True,
             capture_output=True,
             check=False,
+            timeout=20,
         )
         if proc.returncode != 0:
             return None
@@ -118,10 +128,10 @@ def latest_session_id(agent_id: str) -> str | None:
         return None
 
 
-def send_session_callback(task: dict) -> dict:
+def send_session_callback(task: dict, template_override: str | None = None) -> dict:
     callback_agent_id = normalize_optional(task.get("callback_agent_id"))
     callback_session_id = normalize_optional(task.get("callback_session_id"))
-    callback_message_template = normalize_optional(task.get("callback_message"))
+    callback_message_template = normalize_optional(template_override) or normalize_optional(task.get("callback_message"))
     callback_timeout = int(task.get("callback_timeout") or 120)
     callback_timeout = max(30, callback_timeout)
 
@@ -170,6 +180,8 @@ def send_session_callback(task: dict) -> dict:
         "exit_code": task.get("exit_code"),
         "log_file": str(task.get("log_file", "")),
         "finished_at": str(task.get("finished_at", "")),
+        "heartbeat_index": task.get("heartbeat_index"),
+        "elapsed_seconds": task.get("elapsed_seconds"),
     }
     message = render_callback_message(callback_message_template, context)
     cmd = [
@@ -187,11 +199,13 @@ def send_session_callback(task: dict) -> dict:
     ]
 
     try:
+        exec_timeout = max(35, callback_timeout + 15)
         proc = subprocess.run(
             cmd,
             text=True,
             capture_output=True,
             check=False,
+            timeout=exec_timeout,
         )
         return {
             "enabled": True,
@@ -204,6 +218,22 @@ def send_session_callback(task: dict) -> dict:
             "stderr_preview": (proc.stderr or "")[:800],
             "message": message,
             "sent_at": now_iso(),
+            "auto_resolved_session": auto_resolved,
+            "auto_resolve_reason": auto_reason,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "enabled": True,
+            "sent": False,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "timeout_seconds": callback_timeout,
+            "exit_code": 124,
+            "stdout_preview": (exc.stdout or "")[:800],
+            "stderr_preview": "callback_timeout_expired",
+            "message": message,
+            "sent_at": now_iso(),
+            "reason": "callback_timeout_expired",
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
         }
@@ -222,6 +252,44 @@ def send_session_callback(task: dict) -> dict:
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
         }
+
+
+def send_session_callback_with_retry(
+    task: dict,
+    template_override: str | None = None,
+    *,
+    retries: int = 3,
+    initial_backoff_seconds: float = 1.5,
+) -> dict:
+    attempts: list[dict] = []
+    max_attempts = max(1, int(retries))
+    backoff = max(0.5, float(initial_backoff_seconds))
+    last: dict | None = None
+
+    for idx in range(1, max_attempts + 1):
+        result = send_session_callback(task, template_override=template_override)
+        result["attempt"] = idx
+        result["attempted_at"] = now_iso()
+        attempts.append(result)
+        last = result
+
+        if result.get("sent"):
+            break
+
+        enabled = bool(result.get("enabled"))
+        reason = str(result.get("reason", "")).strip().lower()
+        if not enabled or reason == "callback_not_configured":
+            break
+
+        if idx < max_attempts:
+            time.sleep(backoff)
+            backoff = min(backoff * 2.0, 12.0)
+
+    final = dict(last or {"enabled": False, "sent": False, "reason": "callback_not_attempted"})
+    final["attempts"] = attempts
+    final["attempts_count"] = len(attempts)
+    final["sent"] = any(bool(item.get("sent")) for item in attempts)
+    return final
 
 
 def cmd_start(args: argparse.Namespace) -> int:
@@ -255,6 +323,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         "callback_session_id": callback_session_id,
         "callback_message": normalize_optional(args.callback_message),
         "callback_timeout": max(30, int(args.callback_timeout)),
+        "heartbeat_seconds": max(30, int(args.heartbeat_seconds)),
+        "callback_retries": max(1, int(args.callback_retries)),
+        "callback_progress_message": normalize_optional(args.callback_progress_message),
         "callback": None,
     }
     write_state(args.task_id, payload)
@@ -271,6 +342,10 @@ def cmd_start(args: argparse.Namespace) -> int:
         args.cwd,
         "--callback-timeout",
         str(max(30, int(args.callback_timeout))),
+        "--heartbeat-seconds",
+        str(max(30, int(args.heartbeat_seconds))),
+        "--callback-retries",
+        str(max(1, int(args.callback_retries))),
     ]
     if callback_agent_id:
         spawn_cmd.extend(["--callback-agent-id", callback_agent_id])
@@ -278,6 +353,8 @@ def cmd_start(args: argparse.Namespace) -> int:
         spawn_cmd.extend(["--callback-session-id", callback_session_id])
     if normalize_optional(args.callback_message):
         spawn_cmd.extend(["--callback-message", normalize_optional(args.callback_message)])
+    if normalize_optional(args.callback_progress_message):
+        spawn_cmd.extend(["--callback-progress-message", normalize_optional(args.callback_progress_message)])
 
     proc = subprocess.Popen(
         spawn_cmd,
@@ -313,45 +390,109 @@ def cmd_run(args: argparse.Namespace) -> int:
             "callback_session_id": normalize_optional(args.callback_session_id) or current.get("callback_session_id"),
             "callback_message": normalize_optional(args.callback_message) or current.get("callback_message"),
             "callback_timeout": max(30, int(args.callback_timeout or current.get("callback_timeout") or 120)),
+            "heartbeat_seconds": max(30, int(args.heartbeat_seconds or current.get("heartbeat_seconds") or 90)),
+            "callback_retries": max(1, int(args.callback_retries or current.get("callback_retries") or 3)),
+            "callback_progress_message": normalize_optional(args.callback_progress_message)
+            or current.get("callback_progress_message"),
         }
     )
     write_state(args.task_id, current)
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    heartbeat_every = max(30, int(current.get("heartbeat_seconds") or 90))
+    callback_retries = max(1, int(current.get("callback_retries") or 3))
+    progress_template = normalize_optional(current.get("callback_progress_message"))
+    started_epoch = time.time()
+    heartbeat_index = 0
     with log_path(args.task_id).open("a", encoding="utf-8") as logf:
         logf.write(f"[{now_iso()}] START cmd={args.command} cwd={args.cwd}\n")
-        run = subprocess.run(
+        proc = subprocess.Popen(
             ["/bin/zsh", "-lc", args.command],
             cwd=args.cwd,
             text=True,
             stdout=logf,
             stderr=logf,
-            check=False,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
         )
-        logf.write(f"[{now_iso()}] END exit={run.returncode}\n")
+        current["pid"] = proc.pid
+        current["updated_at"] = now_iso()
+        write_state(args.task_id, current)
+
+        # Send immediate start callback so the parent session confirms task is alive.
+        start_task = dict(current)
+        start_task.update({"status": "running", "elapsed_seconds": 0, "heartbeat_index": 0})
+        start_cb = send_session_callback_with_retry(
+            start_task,
+            template_override=progress_template,
+            retries=callback_retries,
+        )
+        logf.write(
+            f"[{now_iso()}] CALLBACK_START sent={start_cb.get('sent')} enabled={start_cb.get('enabled')} "
+            f"rc={start_cb.get('exit_code')} attempts={start_cb.get('attempts_count')}\n"
+        )
+
+        next_heartbeat = time.time() + heartbeat_every
+        while True:
+            rc = proc.poll()
+            if rc is not None:
+                run_return = int(rc)
+                break
+            now_ts = time.time()
+            if now_ts >= next_heartbeat:
+                heartbeat_index += 1
+                elapsed = int(max(0, now_ts - started_epoch))
+                hb_task = dict(current)
+                hb_task.update(
+                    {
+                        "status": "running",
+                        "elapsed_seconds": elapsed,
+                        "heartbeat_index": heartbeat_index,
+                        "updated_at": now_iso(),
+                    }
+                )
+                hb_cb = send_session_callback_with_retry(
+                    hb_task,
+                    template_override=progress_template,
+                    retries=callback_retries,
+                )
+                logf.write(
+                    f"[{now_iso()}] CALLBACK_HEARTBEAT idx={heartbeat_index} elapsed={elapsed}s "
+                    f"sent={hb_cb.get('sent')} enabled={hb_cb.get('enabled')} "
+                    f"rc={hb_cb.get('exit_code')} attempts={hb_cb.get('attempts_count')}\n"
+                )
+                next_heartbeat = now_ts + heartbeat_every
+            time.sleep(1)
+
+        logf.write(f"[{now_iso()}] END exit={run_return}\n")
 
     final = read_state(args.task_id) or {}
     final.update(
         {
-            "status": "completed" if run.returncode == 0 else "failed",
-            "exit_code": run.returncode,
+            "status": "completed" if run_return == 0 else "failed",
+            "exit_code": run_return,
             "finished_at": now_iso(),
             "updated_at": now_iso(),
+            "elapsed_seconds": int(max(0, time.time() - started_epoch)),
+            "heartbeat_index": heartbeat_index,
         }
     )
-    callback_result = send_session_callback(final)
+    callback_result = send_session_callback_with_retry(
+        final,
+        retries=callback_retries,
+    )
     final["callback"] = callback_result
     final["updated_at"] = now_iso()
     with log_path(args.task_id).open("a", encoding="utf-8") as logf:
         logf.write(
             f"[{now_iso()}] CALLBACK sent={callback_result.get('sent')} "
             f"enabled={callback_result.get('enabled')} "
-            f"rc={callback_result.get('exit_code')}\n"
+            f"rc={callback_result.get('exit_code')} attempts={callback_result.get('attempts_count')}\n"
         )
         if callback_result.get("stderr_preview"):
             logf.write(f"[{now_iso()}] CALLBACK_STDERR {callback_result.get('stderr_preview')}\n")
     write_state(args.task_id, final)
-    return run.returncode
+    return run_return
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -424,6 +565,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--callback-session-id")
     p_start.add_argument("--callback-message")
     p_start.add_argument("--callback-timeout", type=int, default=120)
+    p_start.add_argument("--heartbeat-seconds", type=int, default=90)
+    p_start.add_argument("--callback-retries", type=int, default=3)
+    p_start.add_argument("--callback-progress-message")
 
     p_run = sp.add_parser("_run")
     p_run.add_argument("--task-id", required=True)
@@ -433,6 +577,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--callback-session-id")
     p_run.add_argument("--callback-message")
     p_run.add_argument("--callback-timeout", type=int, default=120)
+    p_run.add_argument("--heartbeat-seconds", type=int, default=90)
+    p_run.add_argument("--callback-retries", type=int, default=3)
+    p_run.add_argument("--callback-progress-message")
 
     p_status = sp.add_parser("status")
     p_status.add_argument("--task-id", required=True)
