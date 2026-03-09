@@ -38,6 +38,9 @@ Always include in the evidence appendix:
   - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`,
   - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report ...`,
   - include missing requirement ids (if any) and rework iteration count,
+- codex delegation evidence gate from
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_delegation_gate.py --workspace <target_workspace> --evidence-file ${OPENCLAW_ROOT}/workspace-factory/tmp/codex-last-run.json`,
+  - include command, exit code, and failure reason when blocked.
 - rollback branch reference when created,
 - operational command evidence when applicable:
   - command string,

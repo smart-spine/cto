@@ -9,6 +9,7 @@ Apply only when:
 - apply is explicitly requested.
 - for new-agent workflows: artifact gate passed with exit code `0` using
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_agent_artifact_gate.py" --root "$OPENCLAW_ROOT" --agent-id <agent_id> --require-binding`.
+  - codex evidence enforcement is ON by default inside this gate; DO NOT bypass it.
 - for interactive Telegram agents, interactive runtime gate passed with exit code `0`:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>" --menu-command /menu --callback-namespace <namespace>`.
 

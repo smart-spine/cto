@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     default_state = (
         Path(__file__).resolve().parent.parent / ".cto-brain" / "runtime" / "codex_failure_guard.json"
     )
+    default_evidence = Path(__file__).resolve().parent.parent / "tmp" / "codex-last-run.json"
     p = argparse.ArgumentParser(description="Run codex exec with retries and long-running timeout support")
     p.add_argument("--workdir", required=True, help="Project root passed to codex --cd")
     p.add_argument("--model", default=DEFAULT_MODEL, help="Codex model")
@@ -42,6 +43,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
     p.add_argument("--state-file", default=str(default_state), help="Path to persistent failure counter JSON")
     p.add_argument(
+        "--evidence-file",
+        default=str(default_evidence),
+        help="Path to write machine-readable Codex run evidence JSON",
+    )
+    p.add_argument(
         "--callback-agent-id",
         default=os.getenv("CTO_AGENT_ID"),
         help="Agent id to wake after command completion",
@@ -51,12 +57,27 @@ def parse_args() -> argparse.Namespace:
         default=os.getenv("CTO_SESSION_ID") or os.getenv("OPENCLAW_SESSION_ID"),
         help="Session id to wake after command completion",
     )
-    p.add_argument("--callback-timeout", type=int, default=120, help="Timeout for callback command (seconds)")
+    p.add_argument("--callback-timeout", type=int, default=3600, help="Timeout for callback command (seconds)")
+    p.add_argument(
+        "--callback-channel",
+        default=os.getenv("CTO_CALLBACK_CHANNEL"),
+        help="Optional channel for transport callback fallback (for example: telegram).",
+    )
+    p.add_argument(
+        "--callback-target",
+        default=os.getenv("CTO_CALLBACK_TARGET"),
+        help="Optional channel target for transport callback fallback (for example: -100..:topic:133).",
+    )
     p.add_argument(
         "--callback-message",
         help="Optional callback message template. Supports {status}, {exit_code}, {used_attempts}, {session_id}.",
     )
     return p.parse_args()
+
+
+def write_evidence(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def load_prompt(args: argparse.Namespace) -> str:
@@ -175,6 +196,34 @@ def session_exists(agent_id: str, session_id: str) -> bool:
         return False
 
 
+def session_record(agent_id: str, session_id: str) -> dict | None:
+    sid = normalize_optional(session_id)
+    if not sid:
+        return None
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent_id, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+        if proc.returncode != 0:
+            return None
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return None
+        for item in sessions:
+            if not isinstance(item, dict):
+                continue
+            if normalize_optional(item.get("sessionId")) == sid:
+                return item
+        return None
+    except Exception:
+        return None
+
+
 def latest_session_id(agent_id: str) -> str | None:
     agent = normalize_optional(agent_id)
     if not agent:
@@ -207,16 +256,124 @@ def latest_session_id(agent_id: str) -> str | None:
         return None
 
 
+_KEY_GROUP_TOPIC = re.compile(r":telegram:group:([^:]+):topic:([0-9]+)$")
+_KEY_GROUP = re.compile(r":telegram:group:([^:]+)$")
+_KEY_DIRECT = re.compile(r":telegram:direct:([^:]+)$")
+_KEY_SLASH = re.compile(r"^telegram:slash:([^:]+)$")
+
+
+def parse_telegram_target_from_session_key(key: str) -> str | None:
+    text = normalize_optional(key)
+    if not text:
+        return None
+    for rx in (_KEY_GROUP_TOPIC, _KEY_GROUP, _KEY_DIRECT, _KEY_SLASH):
+        match = rx.search(text)
+        if not match:
+            continue
+        if rx is _KEY_GROUP_TOPIC:
+            return f"{match.group(1)}:topic:{match.group(2)}"
+        return match.group(1)
+    return None
+
+
+def resolve_callback_transport(agent_id: str, session_id: str) -> tuple[str | None, str | None]:
+    item = session_record(agent_id, session_id)
+    if not item:
+        return None, None
+    key = normalize_optional(item.get("key")) or ""
+    target = parse_telegram_target_from_session_key(key)
+    if target:
+        return "telegram", target
+    return None, None
+
+
+def send_transport_callback(
+    *,
+    callback_channel: str | None,
+    callback_target: str | None,
+    callback_timeout: int,
+    callback_message_template: str | None,
+    context: dict,
+) -> dict:
+    channel = normalize_optional(callback_channel)
+    target = normalize_optional(callback_target)
+    callback_timeout = max(30, callback_timeout)
+    if target and not channel:
+        channel = "telegram"
+    if not channel or not target:
+        return {
+            "enabled": False,
+            "sent": False,
+            "reason": "transport_callback_not_configured",
+            "callback_channel": channel,
+            "callback_target": target,
+        }
+    message = render_callback_message(callback_message_template, context)
+    cmd = [
+        "openclaw",
+        "message",
+        "send",
+        "--channel",
+        channel,
+        "--target",
+        target,
+        "--message",
+        message,
+        "--json",
+    ]
+    try:
+        exec_timeout = max(35, callback_timeout + 15)
+        proc = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=exec_timeout)
+        return {
+            "enabled": True,
+            "sent": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "stdout_preview": (proc.stdout or "")[:800],
+            "stderr_preview": (proc.stderr or "")[:800],
+            "callback_channel": channel,
+            "callback_target": target,
+            "sent_at": utc_now(),
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "enabled": True,
+            "sent": False,
+            "exit_code": 124,
+            "stdout_preview": (exc.stdout or "")[:800],
+            "stderr_preview": "transport_callback_timeout_expired",
+            "reason": "transport_callback_timeout_expired",
+            "callback_channel": channel,
+            "callback_target": target,
+            "sent_at": utc_now(),
+        }
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return {
+            "enabled": True,
+            "sent": False,
+            "exit_code": 1,
+            "stdout_preview": "",
+            "stderr_preview": str(exc),
+            "callback_channel": channel,
+            "callback_target": target,
+            "sent_at": utc_now(),
+        }
+
+
 def send_callback(
     *,
     callback_agent_id: str | None,
     callback_session_id: str | None,
+    callback_channel: str | None,
+    callback_target: str | None,
     callback_timeout: int,
     callback_message_template: str | None,
     context: dict,
 ) -> dict:
     agent_id = normalize_optional(callback_agent_id) or "cto-factory"
     session_id = normalize_optional(callback_session_id)
+    channel = normalize_optional(callback_channel)
+    target = normalize_optional(callback_target)
+    explicit_session = bool(session_id)
     auto_resolved = False
     auto_reason = None
     if not session_id:
@@ -235,8 +392,25 @@ def send_callback(
             "reason": "callback_not_configured",
             "agent_id": agent_id,
             "session_id": session_id,
+            "callback_channel": channel,
+            "callback_target": target,
         }
+    if not target:
+        resolved_channel, resolved_target = resolve_callback_transport(agent_id, session_id)
+        channel = channel or resolved_channel
+        target = target or resolved_target
     if not session_exists(agent_id, session_id):
+        if explicit_session:
+            return {
+                "enabled": True,
+                "sent": False,
+                "reason": "callback_session_not_found_strict",
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "strict_session_affinity": True,
+                "callback_channel": channel,
+                "callback_target": target,
+            }
         fallback_session = latest_session_id(agent_id)
         if fallback_session and fallback_session != session_id and session_exists(agent_id, fallback_session):
             session_id = fallback_session
@@ -249,6 +423,8 @@ def send_callback(
                 "reason": "callback_session_not_found",
                 "agent_id": agent_id,
                 "session_id": session_id,
+                "callback_channel": channel,
+                "callback_target": target,
             }
 
     callback_timeout = max(30, callback_timeout)
@@ -282,6 +458,8 @@ def send_callback(
             "sent_at": utc_now(),
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
+            "callback_channel": channel,
+            "callback_target": target,
         }
     except subprocess.TimeoutExpired as exc:
         return {
@@ -298,6 +476,8 @@ def send_callback(
             "reason": "callback_timeout_expired",
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
+            "callback_channel": channel,
+            "callback_target": target,
         }
     except Exception as exc:  # pragma: no cover - defensive branch
         return {
@@ -313,7 +493,35 @@ def send_callback(
             "sent_at": utc_now(),
             "auto_resolved_session": auto_resolved,
             "auto_resolve_reason": auto_reason,
+            "callback_channel": channel,
+            "callback_target": target,
         }
+
+
+def ensure_callback_delivery(args: argparse.Namespace, context: dict) -> dict:
+    callback = send_callback(
+        callback_agent_id=args.callback_agent_id,
+        callback_session_id=args.callback_session_id,
+        callback_channel=args.callback_channel,
+        callback_target=args.callback_target,
+        callback_timeout=args.callback_timeout,
+        callback_message_template=args.callback_message,
+        context=context,
+    )
+    if callback.get("sent"):
+        return callback
+    transport = send_transport_callback(
+        callback_channel=callback.get("callback_channel") or args.callback_channel,
+        callback_target=callback.get("callback_target") or args.callback_target,
+        callback_timeout=args.callback_timeout,
+        callback_message_template=args.callback_message,
+        context=context,
+    )
+    callback["transport_fallback"] = transport
+    if transport.get("sent"):
+        callback["sent"] = True
+        callback["reason"] = "transport_fallback_sent"
+    return callback
 
 
 def load_state(path: Path) -> dict:
@@ -442,12 +650,14 @@ def main() -> int:
     args.retries = max(1, args.retries)
     args.timeout = max(10800, args.timeout)
     prompt = load_prompt(args)
+    started_at = utc_now()
     requested_model = args.model
     resolved_model, model_warning = normalize_model_id(requested_model)
     args.model = resolved_model
     if model_warning:
         print(f"[codex-guard] model fallback: {model_warning}", file=sys.stderr, flush=True)
     cmd = build_cmd(args)
+    evidence_path = Path(args.evidence_file).resolve()
     attempts: list[dict] = []
     state_path = Path(args.state_file).resolve()
     state = load_state(state_path)
@@ -462,28 +672,25 @@ def main() -> int:
             "consecutive_failures": previous_failures,
             "failure_budget": max(args.failure_budget, 1),
         }
-        callback = send_callback(
-            callback_agent_id=args.callback_agent_id,
-            callback_session_id=args.callback_session_id,
-            callback_timeout=args.callback_timeout,
-            callback_message_template=args.callback_message,
-            context=callback_context,
-        )
-        print(
-            json.dumps(
-                {
-                    "ok": False,
-                    "blocked": True,
-                    "reason": "failure_budget_exceeded",
-                    "session_id": session_id,
-                    "consecutive_failures": previous_failures,
-                    "failure_budget": max(args.failure_budget, 1),
-                    "hint": "Repeated Codex transport failures reached budget. Ask user whether to continue retry burn.",
-                    "callback": callback,
-                },
-                ensure_ascii=False,
-            )
-        )
+        callback = ensure_callback_delivery(args, callback_context)
+        out = {
+            "ok": False,
+            "blocked": True,
+            "reason": "failure_budget_exceeded",
+            "session_id": session_id,
+            "consecutive_failures": previous_failures,
+            "failure_budget": max(args.failure_budget, 1),
+            "hint": "Repeated Codex transport failures reached budget. Ask user whether to continue retry burn.",
+            "callback": callback,
+            "started_at_utc": started_at,
+            "finished_at_utc": utc_now(),
+            "workdir": str(Path(args.workdir).resolve()),
+            "evidence_file": str(evidence_path),
+            "model_requested": requested_model,
+            "model_resolved": resolved_model,
+        }
+        write_evidence(evidence_path, out)
+        print(json.dumps(out, ensure_ascii=False))
         return 2
 
     for idx in range(1, max(args.retries, 1) + 1):
@@ -517,29 +724,24 @@ def main() -> int:
                     "model_requested": requested_model,
                     "model_resolved": resolved_model,
                 }
-                callback = send_callback(
-                    callback_agent_id=args.callback_agent_id,
-                    callback_session_id=args.callback_session_id,
-                    callback_timeout=args.callback_timeout,
-                    callback_message_template=args.callback_message,
-                    context=callback_context,
-                )
-                print(
-                    json.dumps(
-                        {
-                            "ok": True,
-                            "attempts": attempts,
-                            "used_attempts": idx,
-                            "session_id": session_id,
-                            "consecutive_failures_before": previous_failures,
-                            "model_requested": requested_model,
-                            "model_resolved": resolved_model,
-                            "model_warning": model_warning,
-                            "callback": callback,
-                        },
-                        ensure_ascii=False,
-                    )
-                )
+                callback = ensure_callback_delivery(args, callback_context)
+                out = {
+                    "ok": True,
+                    "attempts": attempts,
+                    "used_attempts": idx,
+                    "session_id": session_id,
+                    "consecutive_failures_before": previous_failures,
+                    "model_requested": requested_model,
+                    "model_resolved": resolved_model,
+                    "model_warning": model_warning,
+                    "callback": callback,
+                    "started_at_utc": started_at,
+                    "finished_at_utc": utc_now(),
+                    "workdir": str(Path(args.workdir).resolve()),
+                    "evidence_file": str(evidence_path),
+                }
+                write_evidence(evidence_path, out)
+                print(json.dumps(out, ensure_ascii=False))
                 return 0
 
             if idx < args.retries and is_retryable(
@@ -570,30 +772,25 @@ def main() -> int:
         "model_requested": requested_model,
         "model_resolved": resolved_model,
     }
-    callback = send_callback(
-        callback_agent_id=args.callback_agent_id,
-        callback_session_id=args.callback_session_id,
-        callback_timeout=args.callback_timeout,
-        callback_message_template=args.callback_message,
-        context=callback_context,
-    )
-    print(
-        json.dumps(
-            {
-                "ok": False,
-                "attempts": attempts,
-                "used_attempts": len(attempts),
-                "session_id": session_id,
-                "consecutive_failures": consecutive_failures,
-                "failure_budget": max(args.failure_budget, 1),
-                "model_requested": requested_model,
-                "model_resolved": resolved_model,
-                "model_warning": model_warning,
-                "callback": callback,
-            },
-            ensure_ascii=False,
-        )
-    )
+    callback = ensure_callback_delivery(args, callback_context)
+    out = {
+        "ok": False,
+        "attempts": attempts,
+        "used_attempts": len(attempts),
+        "session_id": session_id,
+        "consecutive_failures": consecutive_failures,
+        "failure_budget": max(args.failure_budget, 1),
+        "model_requested": requested_model,
+        "model_resolved": resolved_model,
+        "model_warning": model_warning,
+        "callback": callback,
+        "started_at_utc": started_at,
+        "finished_at_utc": utc_now(),
+        "workdir": str(Path(args.workdir).resolve()),
+        "evidence_file": str(evidence_path),
+    }
+    write_evidence(evidence_path, out)
+    print(json.dumps(out, ensure_ascii=False))
     return 1
 
 

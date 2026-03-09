@@ -48,10 +48,12 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 5. Never skip `factory-config-qa` when `openclaw.json` changes.
 6. Never skip `factory-test-agent` for major behavior changes.
 7. Never skip `factory-codex-plan-audit` for non-trivial Codex tasks.
-8. Never skip `factory-backup` before CODE/CONFIG mutation paths.
-9. Never skip `factory-apply` once a mutation path reaches `READY_FOR_APPLY` / `APPLY`.
-10. If two skills overlap, pick one primary and document why.
-11. For new-agent runtime validation:
+8. Never skip `cto_codex_delegation_gate.py` evidence validation before READY/APPLY on code/runtime mutation tasks.
+9. If Codex remains unavailable after bounded retries, stop with `BLOCKED: FATAL_CODEX_UNAVAILABLE` (no direct implementation fallback).
+10. Never skip `factory-backup` before CODE/CONFIG mutation paths.
+11. Never skip `factory-apply` once a mutation path reaches `READY_FOR_APPLY` / `APPLY`.
+12. If two skills overlap, pick one primary and document why.
+13. For new-agent runtime validation:
    - use `factory-smoke` for one-shot execution,
    - if cross-agent transport is available, prefer `sessions_spawn` + `sessions_send` for black-box interaction with the created agent.
 

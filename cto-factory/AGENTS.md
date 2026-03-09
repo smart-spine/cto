@@ -45,11 +45,18 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
   - `.md`,
   - `.json`,
   - SIMPLE `.sh` scripts,
-  - only when the change does NOT introduce or modify complex runtime logic better suited for Codex.
+  - only when the change does NOT introduce or modify complex runtime logic better suited for Codex,
+  - only for CTO workspace operational/docs artifacts,
+  - MUST NOT be used for generated agent runtime/config implementation work.
 - You MUST delegate ALL complex application logic and runtime behavior changes in `.js`, `.ts`, and `.py` to Codex.
+- For any task that creates/updates a sub-agent workspace, all implementation mutations (including `.json` runtime config) MUST be Codex-produced.
 - If a file type or change is ambiguous, treat it as Codex-required.
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
   - `python3 .../scripts/codex_guarded_exec.py ...`
+- Every guarded Codex run MUST write machine evidence:
+  - `--evidence-file ${OPENCLAW_ROOT}/workspace-factory/tmp/codex-last-run.json`
+- Before `READY_FOR_APPLY`, Codex delegation evidence gate is MANDATORY:
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_delegation_gate.py --workspace <target_workspace> --evidence-file ${OPENCLAW_ROOT}/workspace-factory/tmp/codex-last-run.json`
 - Every Codex run MUST include: `Write Unit Tests & Verify`.
 - For non-trivial tasks, you MUST run TWO Codex phases:
   - `PLAN PHASE`: Codex returns an explicit execution plan and requirement coverage map.
@@ -63,6 +70,9 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 - After each Codex run, you MUST run tests immediately.
 - If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
 - If Codex transport fails, you MUST retry with bounded backoff and report attempts.
+- If Codex is unavailable after bounded retries, you MUST stop with:
+  - `BLOCKED: FATAL_CODEX_UNAVAILABLE`
+  - include command/error evidence and required user action.
 
 ## SKILL ROUTING CONTRACT
 - `SKILL_ROUTING` is mandatory for every non-trivial task.
@@ -138,6 +148,9 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 - You MUST NEVER go silent while a task is still running. Silence longer than 90 seconds is a protocol violation.
 - For any command likely to exceed 90 seconds, you MUST dispatch through async supervisor flow (`cto_async_task.py`) with heartbeat callbacks enabled.
 - If async callback delivery fails, you MUST keep retrying callback delivery and report fallback status in-session at least every 90 seconds until terminal state.
+- Callback routing MUST preserve source-session affinity:
+  - if explicit callback session id is provided, NEVER reroute callback to latest/direct session,
+  - if session callback cannot be delivered, fallback via `openclaw message send` to the same Telegram target (`<chat>` or `<chat>:topic:<id>`).
 - You MUST continue task execution autonomously until `DONE` or a concrete blocker is reached.
 - If blocked, you MUST report the blocker immediately with exact command/error evidence and the next required user action.
 - If an `exec` call returns `Command still running (session ...)`, you MUST immediately start process polling and continue until terminal status (`completed` or `failed`).

@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
+
+CODE_SUFFIXES = {".py", ".js", ".ts"}
 
 
 def nonempty(path: Path) -> bool:
@@ -20,6 +23,28 @@ def main() -> int:
         "--require-binding",
         action="store_true",
         help="Require at least one binding for this agent",
+    )
+    parser.add_argument(
+        "--skip-codex-evidence-check",
+        action="store_true",
+        help="Disable codex evidence enforcement (not recommended)",
+    )
+    parser.add_argument(
+        "--codex-evidence-file",
+        default=None,
+        help="Path to codex_guarded_exec evidence JSON (default: <root>/workspace-factory/tmp/codex-last-run.json)",
+    )
+    parser.add_argument(
+        "--max-codex-age-seconds",
+        type=int,
+        default=21600,
+        help="Maximum allowed age for codex evidence",
+    )
+    parser.add_argument(
+        "--codex-grace-seconds",
+        type=int,
+        default=0,
+        help="Allowed source/evidence mtime skew",
     )
     args = parser.parse_args()
 
@@ -86,6 +111,12 @@ def main() -> int:
             f"missing or empty required file: {workspace / 'skills' / 'SKILL_INDEX.md'}"
         )
 
+    code_files: list[Path] = []
+    if workspace.exists():
+        for p in workspace.rglob("*"):
+            if p.is_file() and p.suffix.lower() in CODE_SUFFIXES:
+                code_files.append(p)
+
     if not config_path.is_file():
         failures.append(f"missing config file: {config_path}")
         cfg = {}
@@ -130,6 +161,75 @@ def main() -> int:
     if not args.require_binding and not has_binding:
         warnings.append(f"no bindings found for agent '{args.agent_id}'")
 
+    codex_evidence_file = (
+        Path(args.codex_evidence_file).resolve()
+        if args.codex_evidence_file
+        else (root / "workspace-factory" / "tmp" / "codex-last-run.json").resolve()
+    )
+    codex_evidence_ok = True
+    codex_evidence_details: dict = {"file": str(codex_evidence_file), "checked": False}
+    if not args.skip_codex_evidence_check and code_files:
+        codex_evidence_details["checked"] = True
+        if not codex_evidence_file.is_file():
+            failures.append(f"missing codex evidence file: {codex_evidence_file}")
+            codex_evidence_ok = False
+        else:
+            try:
+                evidence = json.loads(codex_evidence_file.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                failures.append(f"failed to parse codex evidence file: {exc}")
+                codex_evidence_ok = False
+                evidence = {}
+
+            if evidence:
+                if not bool(evidence.get("ok")):
+                    failures.append("codex evidence indicates non-successful run (ok=false)")
+                    codex_evidence_ok = False
+                used_attempts = int(evidence.get("used_attempts", 0) or 0)
+                if used_attempts < 1:
+                    failures.append("codex evidence has invalid used_attempts (<1)")
+                    codex_evidence_ok = False
+                attempts = evidence.get("attempts") if isinstance(evidence.get("attempts"), list) else []
+                has_codex_exec = False
+                for item in attempts:
+                    if not isinstance(item, dict):
+                        continue
+                    cmd = str(item.get("command", ""))
+                    if "codex exec" in cmd:
+                        has_codex_exec = True
+                        break
+                if not has_codex_exec:
+                    failures.append("codex evidence does not include codex exec command")
+                    codex_evidence_ok = False
+
+                age_seconds = max(0, int(time.time() - codex_evidence_file.stat().st_mtime))
+                if age_seconds > max(60, int(args.max_codex_age_seconds)):
+                    failures.append(
+                        f"codex evidence is stale: age={age_seconds}s > max_age={int(args.max_codex_age_seconds)}s"
+                    )
+                    codex_evidence_ok = False
+
+                cutoff = codex_evidence_file.stat().st_mtime + max(0, int(args.codex_grace_seconds))
+                newer = [str(p) for p in code_files if p.stat().st_mtime > cutoff]
+                if newer:
+                    failures.append(
+                        "source code files were modified after codex evidence timestamp (possible direct mutation): "
+                        + ", ".join(sorted(newer)[:20])
+                    )
+                    codex_evidence_ok = False
+
+                codex_evidence_details.update(
+                    {
+                        "ok": codex_evidence_ok,
+                        "used_attempts": used_attempts,
+                        "attempts_count": len(attempts),
+                    }
+                )
+    elif args.skip_codex_evidence_check:
+        warnings.append("codex evidence enforcement was explicitly skipped")
+    else:
+        warnings.append("no source code files found for codex evidence enforcement")
+
     result = {
         "ok": len(failures) == 0,
         "agent_id": args.agent_id,
@@ -142,7 +242,10 @@ def main() -> int:
             "tool_files_count": len(tool_files),
             "test_files_count": len(test_files),
             "skill_files_count": len(skill_files),
+            "code_files_count": len(code_files),
+            "code_suffixes": sorted(CODE_SUFFIXES),
             "has_binding": has_binding,
+            "codex_evidence": codex_evidence_details,
         },
         "failures": failures,
         "warnings": warnings,
