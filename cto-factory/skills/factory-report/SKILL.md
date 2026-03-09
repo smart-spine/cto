@@ -13,11 +13,19 @@ Always include:
 - cross-agent runtime-test evidence (only when used): `sessions_*` call id(s) and target agent id,
 - key evidence from tests/config QA,
 - for new-agent tasks: artifact gate evidence from
-  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_agent_artifact_gate.py ...`,
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_agent_artifact_gate.py" ...`,
   - include command, exit code, and pass/fail summary lines,
   - include skill package gate evidence from:
-    - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_skill_consistency_gate.py ...`,
-  - include command, exit code, and pass/fail summary lines,
+    - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" ...`,
+- include command, exit code, and pass/fail summary lines,
+- for interactive Telegram agents (buttons/menus):
+  - include interactive gate evidence from:
+    - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace <agent_workspace> --menu-command <menu_command> --callback-namespace <namespace>`
+  - include command, exit code, and missing-runtime/missing-test findings if failed,
+- for non-trivial Codex tasks: codex plan/report gate evidence from
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`,
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report ...`,
+  - include missing requirement ids (if any) and rework iteration count,
 - rollback branch reference when created,
 - operational command evidence when applicable:
   - command string,

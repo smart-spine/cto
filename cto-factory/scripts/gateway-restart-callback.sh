@@ -4,8 +4,11 @@ set -euo pipefail
 AGENT_ID="cto-factory"
 CHAT_ID=""
 TOPIC_ID=""
-TIMEOUT_SECONDS=45
+CALLBACK_SESSION_ID=""
+TIMEOUT_SECONDS=90
+STATUS_TIMEOUT_SECONDS=12
 LOG_DIR="${HOME}/.openclaw/logs"
+OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,8 +24,16 @@ while [[ $# -gt 0 ]]; do
       TOPIC_ID="${2:-}"
       shift 2
       ;;
+    --callback-session-id)
+      CALLBACK_SESSION_ID="${2:-}"
+      shift 2
+      ;;
     --timeout)
-      TIMEOUT_SECONDS="${2:-45}"
+      TIMEOUT_SECONDS="${2:-90}"
+      shift 2
+      ;;
+    --status-timeout)
+      STATUS_TIMEOUT_SECONDS="${2:-12}"
       shift 2
       ;;
     *)
@@ -89,6 +100,13 @@ notify() {
   else
     openclaw system event --mode now --text "${text}" >/dev/null 2>&1 || true
   fi
+  if [[ -n "${CALLBACK_SESSION_ID}" ]]; then
+    openclaw agent \
+      --agent "${AGENT_ID}" \
+      --session-id "${CALLBACK_SESSION_ID}" \
+      --message "${text}" \
+      --timeout 120 >/dev/null 2>&1 || true
+  fi
 }
 
 run_openclaw_with_timeout() {
@@ -121,47 +139,87 @@ except subprocess.TimeoutExpired as exc:
 PY
 }
 
+probe_ok() {
+  local out="$1"
+  if printf "%s" "${out}" | grep -q "RPC probe: ok"; then
+    return 0
+  fi
+  if printf "%s" "${out}" | grep -q "Connect: ok" && printf "%s" "${out}" | grep -q "RPC: ok"; then
+    return 0
+  fi
+  return 1
+}
+
+wait_for_probe() {
+  local timeout_total="$1"
+  local attempts=0
+  local deadline_epoch="$(( $(date +%s) + timeout_total ))"
+  while [[ "$(date +%s)" -lt "${deadline_epoch}" ]]; do
+    attempts="$((attempts + 1))"
+    set +e
+    local out
+    out="$(run_openclaw_with_timeout "${STATUS_TIMEOUT_SECONDS}" openclaw gateway probe 2>&1)"
+    local rc=$?
+    set -e
+    if [[ -n "${out}" ]]; then
+      printf "[probe][attempt=%s][rc=%s] %s\n" "${attempts}" "${rc}" "${out}" >> "${LOG_FILE}" 2>&1
+    else
+      printf "[probe][attempt=%s][rc=%s] <empty>\n" "${attempts}" "${rc}" >> "${LOG_FILE}" 2>&1
+    fi
+    if probe_ok "${out}"; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 {
   echo "[restart] begin $(date -Iseconds)"
   echo "[restart] agent_id=${AGENT_ID}"
   echo "[restart] target chat=${CHAT_ID:-n/a} topic=${TOPIC_ID:-n/a}"
+  echo "[restart] callback_session_id=${CALLBACK_SESSION_ID:-n/a}"
+  echo "[restart] openclaw_root=${OPENCLAW_ROOT}"
+  echo "[restart] timeouts: total=${TIMEOUT_SECONDS}s status=${STATUS_TIMEOUT_SECONDS}s"
 } >> "${LOG_FILE}" 2>&1
 
+# Pre-restart environment snapshot (non-blocking)
 set +e
-RESTART_OUT="$(run_openclaw_with_timeout 25 openclaw gateway restart 2>&1)"
+ENV_OUT="$("${OPENCLAW_ROOT}/workspace-factory/scripts/gateway-runtime-detect.sh" "${STATUS_TIMEOUT_SECONDS}" 2>&1)"
+ENV_RC=$?
+set -e
+printf "[env][rc=%s] %s\n" "${ENV_RC}" "${ENV_OUT}" >> "${LOG_FILE}" 2>&1
+
+# Attempt canonical restart first.
+set +e
+RESTART_OUT="$(run_openclaw_with_timeout 45 openclaw gateway restart 2>&1)"
 RESTART_RC=$?
 set -e
-if [[ -n "${RESTART_OUT}" ]]; then
-  printf "%s\n" "${RESTART_OUT}" >> "${LOG_FILE}" 2>&1
+printf "[restart_cmd][rc=%s] %s\n" "${RESTART_RC}" "${RESTART_OUT}" >> "${LOG_FILE}" 2>&1
+
+if wait_for_probe "${TIMEOUT_SECONDS}"; then
+  notify "Gateway restart complete: RPC probe OK."
+  echo "[restart] complete mode=restart rc=${RESTART_RC} at $(date -Iseconds)" >> "${LOG_FILE}" 2>&1
+  exit 0
 fi
 
-ok=0
-attempt=0
-deadline_epoch="$(( $(date +%s) + TIMEOUT_SECONDS ))"
-while [[ "$(date +%s)" -lt "${deadline_epoch}" ]]; do
-  attempt="$((attempt + 1))"
-  set +e
-  STATUS_OUT="$(run_openclaw_with_timeout 2 openclaw gateway status 2>&1)"
-  STATUS_RC=$?
-  set -e
-  if [[ -n "${STATUS_OUT}" ]]; then
-    printf "[status][attempt=%s][rc=%s] %s\n" "${attempt}" "${STATUS_RC}" "${STATUS_OUT}" >> "${LOG_FILE}" 2>&1
-  else
-    printf "[status][attempt=%s][rc=%s] <empty>\n" "${attempt}" "${STATUS_RC}" >> "${LOG_FILE}" 2>&1
-  fi
-  if printf "%s" "${STATUS_OUT}" | grep -q "RPC probe: ok"; then
-    ok=1
-    break
-  fi
-  sleep 1
-done
+# Fallback path: stop -> start when restart path does not converge.
+set +e
+STOP_OUT="$(run_openclaw_with_timeout 30 openclaw gateway stop 2>&1)"
+STOP_RC=$?
+sleep 2
+START_OUT="$(run_openclaw_with_timeout 45 openclaw gateway start 2>&1)"
+START_RC=$?
+set -e
+printf "[fallback_stop][rc=%s] %s\n" "${STOP_RC}" "${STOP_OUT}" >> "${LOG_FILE}" 2>&1
+printf "[fallback_start][rc=%s] %s\n" "${START_RC}" "${START_OUT}" >> "${LOG_FILE}" 2>&1
 
-if [[ "${ok}" -eq 1 ]]; then
-  notify "Gateway restart complete: RPC probe OK."
-  echo "[restart] complete restart_rc=${RESTART_RC} at $(date -Iseconds)" >> "${LOG_FILE}" 2>&1
+if wait_for_probe "${TIMEOUT_SECONDS}"; then
+  notify "Gateway restart complete: RPC probe OK (fallback stop/start)."
+  echo "[restart] complete mode=fallback stop_rc=${STOP_RC} start_rc=${START_RC} at $(date -Iseconds)" >> "${LOG_FILE}" 2>&1
   exit 0
 fi
 
 notify "Gateway restart failed: RPC probe not ready after ${TIMEOUT_SECONDS}s."
-echo "[restart] failed restart_rc=${RESTART_RC} at $(date -Iseconds)" >> "${LOG_FILE}" 2>&1
+echo "[restart] failed restart_rc=${RESTART_RC} stop_rc=${STOP_RC:-n/a} start_rc=${START_RC:-n/a} at $(date -Iseconds)" >> "${LOG_FILE}" 2>&1
 exit 1

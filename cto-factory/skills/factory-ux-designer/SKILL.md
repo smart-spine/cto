@@ -19,6 +19,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
 
 2. Button safety:
    - inline button callbacks MUST use namespaced payloads (example: `ux:<agent_id>:<action>`),
+   - callback payloads MUST stay short and deterministic (target <= 48 chars, hard max 64 chars),
    - DO NOT use slash-command text inside callback payloads,
    - DO NOT use reserved Telegram/OpenClaw commands as custom business actions.
 
@@ -30,10 +31,21 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
 4. Dual-path interaction:
    - if buttons are provided, a text-command fallback MUST exist,
    - both paths MUST map to the same validated handler logic.
+   - `/menu` (or equivalent entry command) MUST be keyboard-first:
+     - send inline keyboard as primary output,
+     - do NOT dump a long command list in the same success response,
+     - in `buttons` mode: menu MUST be buttons-only on success (no command list body),
+     - in `buttons + commands` mode: menu MAY include one short fallback hint only (`Use /<cmd>`), not full command catalog,
+     - text menu is allowed only as explicit fallback when button-send tool call fails.
 
 5. Output/schema safety:
    - if business output requires specific fields (for example `Problem`, `Complaints`, `Where`, `Source URL`), encode this as explicit formatter contract,
    - tests MUST assert required fields are present in each emitted item.
+
+6. Runtime implementation required (not docs-only):
+   - interactive UX MUST be implemented in executable runtime handlers (router/command dispatcher),
+   - docs/tests-only changes are NOT sufficient,
+   - at least one runtime file must process menu command + callback actions.
 
 ## REQUIRED DELIVERABLES
 For interactive agents, produce:
@@ -41,6 +53,9 @@ For interactive agents, produce:
 - reserved-command safety checklist,
 - interrupt/cancel behavior spec,
 - UX smoke checklist (at least one run covering button + text fallback + cancel path).
+- explicit menu contract:
+  - `menu command -> message tool send with inline keyboard`,
+  - `on tool error -> concise error + text fallback`.
 
 ## VALIDATION CHECKLIST
 Before `READY_FOR_APPLY`:
@@ -51,5 +66,8 @@ Before `READY_FOR_APPLY`:
    - one interactive action start,
    - one cancel/interrupt action,
    - one completion path.
+5. Menu keyboard send is proven in runtime tests:
+   - tests assert inline keyboard payload exists (`buttons` or `reply_markup.inline_keyboard`),
+   - tests assert callbacks route to real handlers.
 
 If any check fails, return `BLOCKED: UX_CONTRACT_NOT_SATISFIED`.

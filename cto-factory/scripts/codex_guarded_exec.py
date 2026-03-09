@@ -41,6 +41,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--failure-budget", type=int, default=3, help="Consecutive failed runs allowed per session")
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
     p.add_argument("--state-file", default=str(default_state), help="Path to persistent failure counter JSON")
+    p.add_argument("--callback-agent-id", help="Agent id to wake after command completion")
+    p.add_argument("--callback-session-id", help="Session id to wake after command completion")
+    p.add_argument("--callback-timeout", type=int, default=120, help="Timeout for callback command (seconds)")
+    p.add_argument(
+        "--callback-message",
+        help="Optional callback message template. Supports {status}, {exit_code}, {used_attempts}, {session_id}.",
+    )
     return p.parse_args()
 
 
@@ -111,6 +118,116 @@ def is_retryable(stderr: str, stdout: str, returncode: int) -> bool:
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def normalize_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def render_callback_message(template: str | None, context: dict) -> str:
+    default_template = (
+        "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}. "
+        "session_id={session_id}"
+    )
+    text = template or default_template
+    try:
+        return text.format_map(_SafeFormatDict(context))
+    except Exception:
+        return default_template.format_map(_SafeFormatDict(context))
+
+
+def session_exists(agent_id: str, session_id: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent_id, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return False
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return False
+        for item in sessions:
+            if isinstance(item, dict) and str(item.get("sessionId", "")).strip() == session_id:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def send_callback(
+    *,
+    callback_agent_id: str | None,
+    callback_session_id: str | None,
+    callback_timeout: int,
+    callback_message_template: str | None,
+    context: dict,
+) -> dict:
+    agent_id = normalize_optional(callback_agent_id)
+    session_id = normalize_optional(callback_session_id)
+    if not agent_id or not session_id:
+        return {"enabled": False, "sent": False, "reason": "callback_not_configured"}
+    if not session_exists(agent_id, session_id):
+        return {
+            "enabled": True,
+            "sent": False,
+            "reason": "callback_session_not_found",
+            "agent_id": agent_id,
+            "session_id": session_id,
+        }
+
+    message = render_callback_message(callback_message_template, context)
+    cmd = [
+        "openclaw",
+        "agent",
+        "--agent",
+        agent_id,
+        "--session-id",
+        session_id,
+        "--message",
+        message,
+        "--json",
+        "--timeout",
+        str(max(15, callback_timeout)),
+    ]
+    try:
+        proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        return {
+            "enabled": True,
+            "sent": proc.returncode == 0,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "timeout_seconds": max(15, callback_timeout),
+            "exit_code": proc.returncode,
+            "stdout_preview": (proc.stdout or "")[:800],
+            "stderr_preview": (proc.stderr or "")[:800],
+            "message": message,
+            "sent_at": utc_now(),
+        }
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return {
+            "enabled": True,
+            "sent": False,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "timeout_seconds": max(15, callback_timeout),
+            "exit_code": 1,
+            "stdout_preview": "",
+            "stderr_preview": str(exc),
+            "message": message,
+            "sent_at": utc_now(),
+        }
 
 
 def load_state(path: Path) -> dict:
@@ -251,6 +368,21 @@ def main() -> int:
     session_id = str(args.session_id or "default")
     previous_failures = int(get_session_record(state, session_id).get("consecutive_failures", 0))
     if previous_failures >= max(args.failure_budget, 1):
+        callback_context = {
+            "status": "blocked",
+            "exit_code": 2,
+            "used_attempts": 0,
+            "session_id": session_id,
+            "consecutive_failures": previous_failures,
+            "failure_budget": max(args.failure_budget, 1),
+        }
+        callback = send_callback(
+            callback_agent_id=args.callback_agent_id,
+            callback_session_id=args.callback_session_id,
+            callback_timeout=args.callback_timeout,
+            callback_message_template=args.callback_message,
+            context=callback_context,
+        )
         print(
             json.dumps(
                 {
@@ -261,6 +393,7 @@ def main() -> int:
                     "consecutive_failures": previous_failures,
                     "failure_budget": max(args.failure_budget, 1),
                     "hint": "Repeated Codex transport failures reached budget. Ask user whether to continue retry burn.",
+                    "callback": callback,
                 },
                 ensure_ascii=False,
             )
@@ -289,6 +422,22 @@ def main() -> int:
 
             if int(run_result["exit_code"]) == 0:
                 mark_success(state_path, state, session_id)
+                callback_context = {
+                    "status": "completed",
+                    "exit_code": 0,
+                    "used_attempts": idx,
+                    "session_id": session_id,
+                    "consecutive_failures_before": previous_failures,
+                    "model_requested": requested_model,
+                    "model_resolved": resolved_model,
+                }
+                callback = send_callback(
+                    callback_agent_id=args.callback_agent_id,
+                    callback_session_id=args.callback_session_id,
+                    callback_timeout=args.callback_timeout,
+                    callback_message_template=args.callback_message,
+                    context=callback_context,
+                )
                 print(
                     json.dumps(
                         {
@@ -300,6 +449,7 @@ def main() -> int:
                             "model_requested": requested_model,
                             "model_resolved": resolved_model,
                             "model_warning": model_warning,
+                            "callback": callback,
                         },
                         ensure_ascii=False,
                     )
@@ -324,6 +474,23 @@ def main() -> int:
             break
 
     consecutive_failures = mark_failure(state_path, state, session_id)
+    callback_context = {
+        "status": "failed",
+        "exit_code": 1,
+        "used_attempts": len(attempts),
+        "session_id": session_id,
+        "consecutive_failures": consecutive_failures,
+        "failure_budget": max(args.failure_budget, 1),
+        "model_requested": requested_model,
+        "model_resolved": resolved_model,
+    }
+    callback = send_callback(
+        callback_agent_id=args.callback_agent_id,
+        callback_session_id=args.callback_session_id,
+        callback_timeout=args.callback_timeout,
+        callback_message_template=args.callback_message,
+        context=callback_context,
+    )
     print(
         json.dumps(
             {
@@ -336,6 +503,7 @@ def main() -> int:
                 "model_requested": requested_model,
                 "model_resolved": resolved_model,
                 "model_warning": model_warning,
+                "callback": callback,
             },
             ensure_ascii=False,
         )

@@ -37,6 +37,7 @@ Minimum extraction rules:
 6. If the task is operational (`openclaw ...` commands), hand off to `factory-openclaw-ops`.
 7. If the task is "restart gateway" (or equivalent), hand off to `factory-openclaw-ops` + `factory-gateway-restart` and enforce restart handshake (pre-ack + callback).
    - Do NOT execute restart commands from intake.
+   - runtime/tool detection MUST happen before restart dispatch.
    - Do NOT use native `gateway` tool `action=restart`.
    - ACT command execution is owned by `factory-gateway-restart`.
 8. If the expected task duration is >60s (for example large Codex generation), set `KEEPALIVE_PLAN: REQUIRED` in the intake output.

@@ -10,22 +10,25 @@ Purpose:
 Mandatory protocol:
 1. Pre-ack and execution are a single operational step. Text-only acknowledgement is forbidden.
 2. In the same assistant turn, execute a tool action that dispatches restart immediately.
-3. Default restart path is detached dispatcher script:
-   - `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh`
-4. Dispatcher script must send completion callback:
+3. Resolve runtime before dispatch:
+   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
+   - use `restart_tool` from detector output when present.
+4. Default restart path is detached dispatcher script:
+   - `${OPENCLAW_ROOT}/workspace-factory/scripts/gateway-restart-callback.sh`
+5. Dispatcher script must send completion callback:
    - primary transport: `openclaw message send` to the bound Telegram group/topic,
    - fallback transport: `openclaw system event --mode now --text ...`.
-5. Callback success text: `Gateway restart complete: RPC probe OK.`
-6. Callback failure text: `Gateway restart failed: RPC probe not ready after timeout.`
+6. Callback success text: `Gateway restart complete: RPC probe OK.`
+7. Callback failure text: `Gateway restart failed: RPC probe not ready after timeout.`
 
 Required ACT command (recommended):
 ```bash
-nohup /usr/bin/env bash ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory >/dev/null 2>&1 &
+OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &
 ```
 
 If explicit chat/topic targeting is needed:
 ```bash
-nohup /usr/bin/env bash ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/gateway-restart-callback.sh --agent-id cto-factory --chat <chat_id> --topic <topic_id> >/dev/null 2>&1 &
+OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --chat <chat_id> --topic <topic_id> --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &
 ```
 
 Post-dispatch verification:
@@ -50,6 +53,7 @@ Reporting requirements:
 - include the exact dispatcher command used,
 - include the dispatcher command exit code from `ACT`,
 - include expected callback transport (`message send` with fallback `system event`),
+- include session wake callback status when `--callback-session-id` was provided,
 - include where to inspect logs:
   - `$HOME/.openclaw/logs/cto-gateway-restart-*.log`.
 

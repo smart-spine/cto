@@ -39,11 +39,146 @@ def write_state(task_id: str, payload: dict) -> None:
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def normalize_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def render_callback_message(template: str | None, context: dict) -> str:
+    default_template = (
+        "ASYNC_TASK_COMPLETE "
+        "task_id={task_id} status={status} exit_code={exit_code}. "
+        "Log: {log_file}"
+    )
+    text = template or default_template
+    try:
+        rendered = text.format_map(_SafeFormatDict(context))
+    except Exception:
+        rendered = default_template.format_map(_SafeFormatDict(context))
+    return rendered
+
+
+def session_exists(agent_id: str, session_id: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["openclaw", "sessions", "--agent", agent_id, "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return False
+        payload = json.loads(proc.stdout or "{}")
+        sessions = payload.get("sessions") if isinstance(payload, dict) else None
+        if not isinstance(sessions, list):
+            return False
+        for item in sessions:
+            if isinstance(item, dict) and str(item.get("sessionId", "")).strip() == session_id:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def send_session_callback(task: dict) -> dict:
+    callback_agent_id = normalize_optional(task.get("callback_agent_id"))
+    callback_session_id = normalize_optional(task.get("callback_session_id"))
+    callback_message_template = normalize_optional(task.get("callback_message"))
+    callback_timeout = int(task.get("callback_timeout") or 120)
+    callback_timeout = max(15, callback_timeout)
+
+    if not callback_agent_id or not callback_session_id:
+        return {
+            "enabled": False,
+            "sent": False,
+            "reason": "callback_not_configured",
+        }
+    if not session_exists(callback_agent_id, callback_session_id):
+        return {
+            "enabled": True,
+            "sent": False,
+            "reason": "callback_session_not_found",
+            "agent_id": callback_agent_id,
+            "session_id": callback_session_id,
+        }
+
+    context = {
+        "task_id": str(task.get("task_id", "")),
+        "status": str(task.get("status", "")),
+        "exit_code": task.get("exit_code"),
+        "log_file": str(task.get("log_file", "")),
+        "finished_at": str(task.get("finished_at", "")),
+    }
+    message = render_callback_message(callback_message_template, context)
+    cmd = [
+        "openclaw",
+        "agent",
+        "--agent",
+        callback_agent_id,
+        "--session-id",
+        callback_session_id,
+        "--message",
+        message,
+        "--json",
+        "--timeout",
+        str(callback_timeout),
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return {
+            "enabled": True,
+            "sent": proc.returncode == 0,
+            "agent_id": callback_agent_id,
+            "session_id": callback_session_id,
+            "timeout_seconds": callback_timeout,
+            "exit_code": proc.returncode,
+            "stdout_preview": (proc.stdout or "")[:800],
+            "stderr_preview": (proc.stderr or "")[:800],
+            "message": message,
+            "sent_at": now_iso(),
+        }
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return {
+            "enabled": True,
+            "sent": False,
+            "agent_id": callback_agent_id,
+            "session_id": callback_session_id,
+            "timeout_seconds": callback_timeout,
+            "exit_code": 1,
+            "stdout_preview": "",
+            "stderr_preview": str(exc),
+            "message": message,
+            "sent_at": now_iso(),
+        }
+
+
 def cmd_start(args: argparse.Namespace) -> int:
     existing = read_state(args.task_id)
     if existing and existing.get("status") in {"queued", "running"}:
         print(json.dumps({"ok": False, "error": "task_already_running", "task": existing}, ensure_ascii=False))
         return 1
+
+    callback_session_id = (
+        normalize_optional(args.callback_session_id)
+        or normalize_optional(os.getenv("CTO_SESSION_ID"))
+        or normalize_optional(os.getenv("OPENCLAW_SESSION_ID"))
+    )
+    callback_agent_id = normalize_optional(args.callback_agent_id)
+    if callback_session_id and not callback_agent_id:
+        callback_agent_id = normalize_optional(os.getenv("CTO_AGENT_ID")) or "cto-factory"
 
     payload = {
         "task_id": args.task_id,
@@ -57,21 +192,36 @@ def cmd_start(args: argparse.Namespace) -> int:
         "pid": None,
         "exit_code": None,
         "log_file": str(log_path(args.task_id)),
+        "callback_agent_id": callback_agent_id,
+        "callback_session_id": callback_session_id,
+        "callback_message": normalize_optional(args.callback_message),
+        "callback_timeout": max(15, int(args.callback_timeout)),
+        "callback": None,
     }
     write_state(args.task_id, payload)
 
+    spawn_cmd = [
+        sys.executable,
+        __file__,
+        "_run",
+        "--task-id",
+        args.task_id,
+        "--cmd",
+        args.command,
+        "--cwd",
+        args.cwd,
+        "--callback-timeout",
+        str(max(15, int(args.callback_timeout))),
+    ]
+    if callback_agent_id:
+        spawn_cmd.extend(["--callback-agent-id", callback_agent_id])
+    if callback_session_id:
+        spawn_cmd.extend(["--callback-session-id", callback_session_id])
+    if normalize_optional(args.callback_message):
+        spawn_cmd.extend(["--callback-message", normalize_optional(args.callback_message)])
+
     proc = subprocess.Popen(
-        [
-            sys.executable,
-            __file__,
-            "_run",
-            "--task-id",
-            args.task_id,
-            "--cmd",
-            args.command,
-            "--cwd",
-            args.cwd,
-        ],
+        spawn_cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
@@ -100,6 +250,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             "updated_at": now_iso(),
             "pid": os.getpid(),
             "log_file": str(log_path(args.task_id)),
+            "callback_agent_id": normalize_optional(args.callback_agent_id) or current.get("callback_agent_id"),
+            "callback_session_id": normalize_optional(args.callback_session_id) or current.get("callback_session_id"),
+            "callback_message": normalize_optional(args.callback_message) or current.get("callback_message"),
+            "callback_timeout": max(15, int(args.callback_timeout or current.get("callback_timeout") or 120)),
         }
     )
     write_state(args.task_id, current)
@@ -126,6 +280,17 @@ def cmd_run(args: argparse.Namespace) -> int:
             "updated_at": now_iso(),
         }
     )
+    callback_result = send_session_callback(final)
+    final["callback"] = callback_result
+    final["updated_at"] = now_iso()
+    with log_path(args.task_id).open("a", encoding="utf-8") as logf:
+        logf.write(
+            f"[{now_iso()}] CALLBACK sent={callback_result.get('sent')} "
+            f"enabled={callback_result.get('enabled')} "
+            f"rc={callback_result.get('exit_code')}\n"
+        )
+        if callback_result.get("stderr_preview"):
+            logf.write(f"[{now_iso()}] CALLBACK_STDERR {callback_result.get('stderr_preview')}\n")
     write_state(args.task_id, final)
     return run.returncode
 
@@ -196,11 +361,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--task-id", required=True)
     p_start.add_argument("--cmd", dest="command", required=True)
     p_start.add_argument("--cwd", default=str(OPENCLAW_ROOT))
+    p_start.add_argument("--callback-agent-id")
+    p_start.add_argument("--callback-session-id")
+    p_start.add_argument("--callback-message")
+    p_start.add_argument("--callback-timeout", type=int, default=120)
 
     p_run = sp.add_parser("_run")
     p_run.add_argument("--task-id", required=True)
     p_run.add_argument("--cmd", dest="command", required=True)
     p_run.add_argument("--cwd", default=str(OPENCLAW_ROOT))
+    p_run.add_argument("--callback-agent-id")
+    p_run.add_argument("--callback-session-id")
+    p_run.add_argument("--callback-message")
+    p_run.add_argument("--callback-timeout", type=int, default=120)
 
     p_status = sp.add_parser("status")
     p_status.add_argument("--task-id", required=True)

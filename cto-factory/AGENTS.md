@@ -43,6 +43,15 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
   - `python3 .../scripts/codex_guarded_exec.py ...`
 - Every Codex run MUST include: `Write Unit Tests & Verify`.
+- For non-trivial tasks, you MUST run TWO Codex phases:
+  - `PLAN PHASE`: Codex returns an explicit execution plan and requirement coverage map.
+  - `IMPLEMENT PHASE`: Codex implements according to the approved plan and returns completion evidence.
+- Codex responses for both phases MUST include machine-checkable JSON blocks:
+  - `CODEX_PLAN_JSON_BEGIN` ... `CODEX_PLAN_JSON_END`
+  - `CODEX_EXEC_REPORT_JSON_BEGIN` ... `CODEX_EXEC_REPORT_JSON_END`
+- You MUST validate those blocks via gate script before proceeding:
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py ...`
+- If plan/report gate fails, you MUST NOT continue. Return to Codex with concrete gap list and rerun.
 - After each Codex run, you MUST run tests immediately.
 - If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
 - If Codex transport fails, you MUST retry with bounded backoff and report attempts.
@@ -70,7 +79,7 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - `openclaw config validate --json` is MANDATORY when config changes.
 - Config path MUST be explicit and absolute.
 - Canonical root config for this deployment is:
-  - `/Users/uladzislaupraskou/.openclaw/openclaw.json`
+  - `${OPENCLAW_ROOT}/openclaw.json`
 - NEVER assume config lives under `workspace-factory/`.
 - If validation fails due to SIMPLE JSON syntax (for example missing comma/bracket), fix directly and revalidate.
 - If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to Codex.
@@ -81,6 +90,7 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - Smoke MUST be business-realistic, not a placeholder command.
 - Smoke MUST verify requested behavior end-to-end:
   - input -> processing -> expected output/delivery.
+- If intake selected `buttons` or `buttons + commands`, smoke MUST prove real inline-button delivery evidence (not text-only fallback).
 - If smoke cannot run due to missing prerequisite (credentials/channel/runtime), return `BLOCKED` with exact prerequisite.
 
 ## SAFETY
@@ -88,6 +98,8 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - Rollback path MUST be valid before apply.
 - Work strictly inside allowed workspace scope.
 - No fake capability claims. If tool/runtime is unavailable, state limitation clearly and offer local alternative.
+- For gateway lifecycle operations (`start/stop/restart`), runtime/tool detection MUST run first:
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
 
 ## COMMUNICATION CONTRACT
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.

@@ -17,6 +17,13 @@ For newly created/modified agents (mandatory):
    - `timeout 60 openclaw agent --agent <id> --message "<realistic user request>"`
    - on macOS use `gtimeout 60 ...` if GNU `timeout` is not available.
 7. For delivery agents, verify delivery-path evidence (for example `sent=true`, no fallback) when runtime/channel is available.
+7a. If intake explicitly requested `buttons` or `buttons + commands`, smoke MUST verify inline-button delivery evidence in the target chat/topic:
+   - one message-tool send (or agent-generated send) includes inline keyboard payload,
+   - provider response confirms send success (`sent=true` or equivalent message id evidence),
+   - text-only fallback menu does NOT satisfy this requirement.
+7b. For interactive button agents, smoke MUST run runtime UX gate:
+   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>" --menu-command <menu_command> --callback-namespace <namespace>`
+   - treat non-zero exit as hard smoke failure.
 8. If runtime/channel prerequisites are missing, report `BLOCKED` with exact prerequisite and do not claim `READY_FOR_APPLY`.
 9. Scope boundary:
    - `factory-smoke` is fast and task-focused.

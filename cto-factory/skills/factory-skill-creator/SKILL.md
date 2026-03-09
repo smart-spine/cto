@@ -36,7 +36,7 @@ Procedure:
    - include exact line: `Write Unit Tests & Verify`.
 4. Validate consistency:
    - run deterministic gate:
-     - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_skill_consistency_gate.py --workspace <agent_workspace>`
+     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace <agent_workspace>`
    - if gate fails, fix and rerun until green.
 5. Ensure agent profile references skill package behavior:
    - `<agent_workspace>/PROMPTS.md` should mention skill routing expectation,

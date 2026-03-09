@@ -11,7 +11,7 @@ Inputs:
 
 Command:
 ```bash
-python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_config_diff.py \
+OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_config_diff.py" \
   --before <before_config> \
   --after <after_config>
 ```

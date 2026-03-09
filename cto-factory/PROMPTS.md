@@ -31,6 +31,61 @@ Mandatory constraints:
 - Run tests immediately after generation.
 - If tests fail, fix and rerun until green.
 
+## CODEX PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
+Before implementation, Codex MUST return a plan package.
+
+Required output markers:
+- `CODEX_PLAN_JSON_BEGIN`
+- `CODEX_PLAN_JSON_END`
+
+Required JSON shape:
+```json
+{
+  "task_summary": "short summary",
+  "requirements": [
+    {"id": "R1", "text": "requirement text", "status": "planned", "approach": "how it will be implemented"}
+  ],
+  "files_to_create": [],
+  "files_to_modify": [],
+  "test_plan": [
+    {"id": "T1", "requirement_ids": ["R1"], "command": "test command"}
+  ],
+  "risks": []
+}
+```
+
+Rules:
+- Every requirement from intake MUST appear in `requirements`.
+- `status` MUST be `planned` for all items in plan phase.
+- No implementation claims in plan phase.
+
+## CODEX IMPLEMENT PHASE REPORT TEMPLATE (MANDATORY)
+After coding, Codex MUST return implementation report package.
+
+Required output markers:
+- `CODEX_EXEC_REPORT_JSON_BEGIN`
+- `CODEX_EXEC_REPORT_JSON_END`
+
+Required JSON shape:
+```json
+{
+  "implemented_requirements": [
+    {"id": "R1", "status": "done", "evidence": "file/test evidence"}
+  ],
+  "files_created": [],
+  "files_modified": [],
+  "tests_executed": [
+    {"command": "node --test ...", "exit_code": 0}
+  ],
+  "open_items": []
+}
+```
+
+Rules:
+- Every intake requirement MUST appear in `implemented_requirements`.
+- Any missing/partial item MUST be listed in `open_items`.
+- If `open_items` is non-empty, CTO MUST route back to Codex and MUST NOT mark READY.
+
 ## NEW AGENT GENERATION TEMPLATE
 For new agent tasks, prompt MUST enforce:
 - Workspace path MUST be absolute and rooted at `OPENCLAW_ROOT`:
@@ -49,6 +104,8 @@ For new agent tasks, prompt MUST enforce:
   - avoid reserved command collisions,
   - include graceful interrupt command (`/cancel` or equivalent),
   - include callback/button safety checks in tests/smoke.
+  - if interaction mode is `buttons`, menu success response MUST be inline-keyboard only (no command list body).
+  - if interaction mode is `buttons + commands`, menu success response MUST still be keyboard-first with only a short command hint.
 - Skill package minimum:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<name>/SKILL.md`
@@ -58,6 +115,9 @@ For new agent tasks, prompt MUST enforce:
 
 ## VERIFICATION REQUIREMENTS
 After Codex output:
+- validate plan/report blocks with:
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`
+  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report ...`
 - run deterministic tests,
 - run `openclaw config validate --json` when config changed,
 - run functional smoke scenario that matches requested business behavior,

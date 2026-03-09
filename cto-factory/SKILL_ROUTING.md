@@ -13,9 +13,9 @@ Mandatory use:
 
 | Task intent | Primary skill(s) | Secondary skill(s) | Do not use |
 | --- | --- | --- | --- |
-| Build/create a new agent | `factory-create-agent`, `factory-skill-creator` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-config-qa`, `factory-test-agent`, `factory-smoke` | `factory-codegen` alone |
+| Build/create a new agent | `factory-create-agent`, `factory-skill-creator` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke` | `factory-codegen` alone |
 | Add/update skills in an existing agent | `factory-skill-creator` | `factory-codegen`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
-| Modify existing code/config behavior | `factory-codegen` | `factory-config-qa`, `factory-test-agent`, `factory-smoke` | `factory-create-agent` |
+| Modify existing code/config behavior | `factory-codegen` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke` | `factory-create-agent` |
 | Design/modify Telegram interactive UX (buttons, menus, command surface) | `factory-ux-designer` | `factory-create-agent`, `factory-test-agent`, `factory-smoke` | direct implementation without UX safety spec |
 | Investigate unknown errors or external APIs | `factory-research` | `factory-preflight`, `factory-codegen` | blind implementation without docs check |
 | OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only) | naked operational commands without protocol wrapper |
@@ -30,7 +30,9 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 - required file: `skills/SKILL_INDEX.md`
 - required content: at least one concrete skill folder `skills/<skill-name>/SKILL.md`
 - required gate: run
-  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_skill_consistency_gate.py --workspace ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-<agent_id>`
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>"`
+- for interactive Telegram agents, required gate:
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_id>"`
 
 `SKILL_INDEX.md` must include:
 - skill inventory,
@@ -44,8 +46,9 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 3. For interactive Telegram UX tasks (buttons/menus/custom command flows), `factory-ux-designer` is mandatory before CODE.
 4. Never skip `factory-config-qa` when `openclaw.json` changes.
 5. Never skip `factory-test-agent` for major behavior changes.
-6. If two skills overlap, pick one primary and document why.
-7. For new-agent runtime validation:
+6. Never skip `factory-codex-plan-audit` for non-trivial Codex tasks.
+7. If two skills overlap, pick one primary and document why.
+8. For new-agent runtime validation:
    - use `factory-smoke` for one-shot execution,
    - if cross-agent transport is available, prefer `sessions_spawn` + `sessions_send` for black-box interaction with the created agent.
 

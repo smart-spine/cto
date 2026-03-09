@@ -115,7 +115,7 @@ Comparative analysis (baseline vs candidate):
 - classify result:
   - `REGRESSION`, `NO_CHANGE`, or `IMPROVED`.
 - optional helper command:
-  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_compare_run.py --baseline-response <path> --candidate-response <path> --old-workspace <path> --new-workspace <path>`.
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_compare_run.py" --baseline-response <path> --candidate-response <path> --old-workspace <path> --new-workspace <path>`.
 
 Execution constraints for QA prompts:
 - prompts must sound like normal human requests,
@@ -148,7 +148,7 @@ Report contract:
 
 Automation helper:
 - use the session runner for repeatable multi-session evaluation:
-  - `python3 ${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/workspace-factory/scripts/cto_qa_suite_v2.py --workdir ${OPENCLAW_STATE_DIR:-$HOME/.openclaw} --agent cto-factory`
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_qa_suite_v2.py" --workdir "$OPENCLAW_ROOT" --agent cto-factory`
 - runner output:
   - `summary.json` with pass/fail across 8 sessions,
   - per-session full transcript `.txt`,

@@ -13,6 +13,7 @@ Purpose:
 | `factory-preflight` | Environment/provider/model preflight checks. |
 | `factory-backup` | Git rollback checkpoint creation. |
 | `factory-codegen` | Codex-based implementation orchestration for complex logic. |
+| `factory-codex-plan-audit` | Validates Codex plan/report coverage against intake requirements. |
 | `factory-create-agent` | New agent workspace creation + registration contract. |
 | `factory-skill-creator` | Skill package generation/consistency for created agents. |
 | `factory-ux-designer` | Telegram interactive UX safety (buttons/commands/cancel/status). |
@@ -37,5 +38,7 @@ Purpose:
 3. Any `openclaw.json` mutation MUST pass `factory-config-qa`.
 4. Any major behavior change MUST pass `factory-test-agent` + `factory-smoke`.
 5. CODE/CONFIG mutation MUST NOT start before `factory-intake` sign-off approval.
+6. Non-trivial Codex work MUST pass `factory-codex-plan-audit` (plan gate + exec-report gate) before READY.
+7. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY.
 
 See routing matrix: `../SKILL_ROUTING.md`.

@@ -35,8 +35,10 @@ Safety:
 - avoid host-wide discovery commands unless user explicitly requested forensic investigation.
 - for any `openclaw ...` command, use `factory-openclaw-ops` (`PLAN -> ACT -> OBSERVE -> REACT`) and report exit code + key result line.
 - for gateway restart, use detached restart flow + callback event so the user gets completion feedback.
+- before gateway restart, run runtime detector:
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
 - preferred restart ACT command:
-  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory >/dev/null 2>&1 &`.
+  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &`.
 - forbidden for restart: native `gateway` tool call with `action=\"restart\"`.
 - forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
 - forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
