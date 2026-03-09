@@ -22,6 +22,7 @@ Output contract:
   - `name`
   - `description`
 - ensure routing matrix maps each intent to one primary skill.
+- ensure `SKILL_INDEX.md` contains an explicit anti-overlap rule that forbids multiple primary skills for the same intent.
 
 Procedure:
 1. Gather skill-use cases from current agent scope:
@@ -36,7 +37,7 @@ Procedure:
    - include exact line: `Write Unit Tests & Verify`.
 4. Validate consistency:
    - run deterministic gate:
-     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace <agent_workspace>`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace <agent_workspace>`
    - if gate fails, fix and rerun until green.
 5. Ensure agent profile references skill package behavior:
    - `<agent_workspace>/PROMPTS.md` should mention skill routing expectation,

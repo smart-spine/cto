@@ -8,10 +8,21 @@ Keep only:
 - validation outcome,
 - rollback pointer,
 - next action,
+- session metadata required to resume safely:
+  - session id / chat binding context,
+  - selected skills and current phase,
+  - sign-off state,
+  - blocked prerequisites,
+- approval metadata required to resume safely:
+  - pending apply request id,
+  - apply summary,
+  - shorthand option mapping (`A/B/C`),
 - memory candidates extracted from the run.
 
 Output contract:
 - include concise summary block for next phase,
+- include `session_metadata` object with safe-to-resume identifiers and phase info,
+- include `approval_state` object when apply approval is pending or recently resolved,
 - emit a machine-readable control signal that wrapper/runner can parse, for example:
   - `control_signal: CONTEXT_RESET_TO_SUMMARY_V1`
   - `summary: <compact text>`

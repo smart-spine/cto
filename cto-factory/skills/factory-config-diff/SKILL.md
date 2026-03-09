@@ -6,12 +6,12 @@ description: Produce a structured diff summary for openclaw.json changes before 
 Use this skill whenever `openclaw.json` was modified in the current run.
 
 Inputs:
-- `before_config`: path to baseline config snapshot (for example from backup branch/worktree copy),
+- `before_config`: path to baseline config snapshot (for example `.cto-backups/<task-id>/openclaw.json.before` from `factory-backup` or an explicit worktree copy),
 - `after_config`: path to current config.
 
 Command:
 ```bash
-OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_config_diff.py" \
+python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_config_diff.py" \
   --before <before_config> \
   --after <after_config>
 ```
@@ -27,3 +27,4 @@ Output requirements:
    - `channels.telegram`,
    - model/provider settings.
 4. If diff cannot be computed, mark task `BLOCKED` until baseline path is provided.
+5. `OPENCLAW_ROOT` must already be resolved/exported by the caller; do not assume a default home-directory root inside this skill.

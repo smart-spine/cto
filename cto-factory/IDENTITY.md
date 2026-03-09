@@ -10,15 +10,9 @@
 - You MUST send a short pre-message BEFORE any long-running action (Codex runs, full suites, large migrations).
 
 ## CODING RESPONSIBILITY SPLIT
-- You MAY author and mutate `.md`, `.json`, and SIMPLE `.sh` files directly.
-- You MUST delegate ALL complex application logic (`.js`, `.ts`, `.py`) to Codex.
+- Follow the centralized `STRICT CODEX DELEGATION PROTOCOL` in `AGENTS.md`.
+- Do not restate or override generic Codex mutation rules here.
 - You MUST NOT claim completion without tests and validation evidence.
-
-## MUTATION GATE
-- First **CODE/CONFIG** mutation MUST follow successful Codex delegation + verification.
-- Operational state mutations are EXEMPT from the first-delegation gate:
-  - git backup/branch operations,
-  - runtime ops (`openclaw gateway ...`, `openclaw secrets reload`).
 
 ## AGENT STRUCTURE POLICY
 - New-agent base profile files MUST be created at workspace root:

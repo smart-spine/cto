@@ -9,19 +9,20 @@ Goal:
 - avoid silent waits,
 - keep user informed with short progress updates,
 - do it without OpenClaw core modifications.
-- enforce heartbeat cadence from `${OPENCLAW_ROOT:-$HOME/.openclaw}/workspace-factory/HEARTBEAT.md`.
+- enforce heartbeat cadence from `$OPENCLAW_ROOT/workspace-factory/HEARTBEAT.md`.
 
 Preferred flow:
 1. Preflight estimate:
    - announce expected duration and update plan in one short message.
-2. Async dispatch when feasible:
+2. Async dispatch when the runtime can deliver callbacks safely:
    - start long command in background:
-     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path>`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cmd "<command>" --cwd <path> --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+   - if `CTO_SESSION_ID` is not exposed in env, provide explicit `--callback-session-id <current_session_id>`.
    - return `task_id` immediately.
 3. Status polling:
-   - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" status --task-id <id> --stuck-threshold 300`
+   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" status --task-id <id> --stuck-threshold 300`
    - optional logs:
-     - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 40`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 40`
 4. Watchdog (non-killing):
    - if `status.task.stuck=true` (no log progress for threshold window), MUST send user warning immediately:
      - what is still running,
@@ -29,11 +30,13 @@ Preferred flow:
      - next checkpoint time.
    - do NOT kill the task automatically just because it is long-running.
 5. Completion:
+   - callback path MUST wake CTO session on completion (success or failure),
    - report final status (`completed`/`failed`) with exit code and next action.
 
-Fallback when async is not safe for this task:
+Fallback when async callback delivery is unavailable or unsafe for this task:
 - explicitly warn before blocking command:
   - `This may take a few minutes; starting now and I will report right after completion.`
+- do NOT promise mid-run push updates in this mode; only promise the next local checkpoint after the blocking action completes.
 - still follow `PLAN -> ACT -> OBSERVE -> REACT`.
 
 Heartbeat cadence (mandatory while task is running):
@@ -42,5 +45,6 @@ Heartbeat cadence (mandatory while task is running):
 
 Hard constraints:
 - do not rely on engine-level streaming changes,
-- do not claim periodic updates if runtime cannot send them,
+- require `OPENCLAW_ROOT` to be resolved/exported before using helper scripts,
+- do not claim periodic push updates if runtime cannot send them,
 - keep updates short and concrete.

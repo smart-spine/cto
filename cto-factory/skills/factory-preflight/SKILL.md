@@ -9,6 +9,10 @@ Checks:
 - task stays within declared workspace scope,
 - free disk space in project filesystem is sufficient for the run (warn/block if critically low),
 - current git status is captured before backup (report dirty/clean),
+- current untracked-file inventory is captured before backup:
+  - classify files as generated scratch vs user-owned artifacts,
+  - if user-owned untracked files exist (for example `.env`, screenshots, copied logs, manual notes), WARN or BLOCK before any rollback-capable flow,
+  - surface a `rollback_cleanup_risk` note that `git clean -fd` would delete those files unless protected or relocated,
 - gateway health is captured (`openclaw gateway status`) for tasks that require runtime checks/telegram delivery,
 - root `openclaw.json` provider/model context is read and summarized before CODE,
 - provider/model proposal aligns with currently used provider family unless explicitly overridden by user,
@@ -20,3 +24,4 @@ Checks:
 - `.cto-brain/INDEX.md` exists (or is created) and typed memory folders are present:
   - `facts`, `decisions`, `patterns`, `incidents`, `preferences`, `plans/active`, `plans/completed`, `archive`.
 - if referenced memory notes are stale (older than 30 days), flag them for review in preflight output.
+- if config is expected to change, reserve and report a deterministic baseline snapshot path for `factory-backup` / `factory-config-diff` (for example `.cto-backups/<task-id>/openclaw.json.before`).

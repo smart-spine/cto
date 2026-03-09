@@ -14,4 +14,4 @@ Procedure:
 3. Fetch the content and summarize the findings.
 4. Inject the summarized architectural patterns or API definitions into your Codex generation prompt in the `CODE` phase.
 5. Record the fact that research was performed and list the URLs consulted in the handoff report.
-6. After completing research, return to the next pipeline phase (`PREFLIGHT`). Do NOT skip any subsequent pipeline steps.
+6. After completing research, return to the caller's blocked phase (for example `INTAKE`, `PREFLIGHT`, `CODE`, or `CONFIG_QA`) and continue the state machine from there. Do NOT blindly rewind to `PREFLIGHT` unless that was the blocked phase.
