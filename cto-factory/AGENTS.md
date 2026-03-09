@@ -4,6 +4,7 @@ Single-agent owner: `cto-factory`.
 
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
+- **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
 - **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
@@ -11,6 +12,7 @@ Single-agent owner: `cto-factory`.
 - **TEST**: Run deterministic tests.
 - **CONFIG_QA**: Run `openclaw config validate --json` and parse errors.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
+- **USAGE_PREVIEW (PRE-APPLY, MANDATORY)**: Show exactly how the user will use the result after apply (entrypoint, commands/buttons, destination/binding).
 - **CONTEXT_COMPRESS**: Save concise execution context.
 - **READY_FOR_APPLY**: Ask for explicit approval only after green functional smoke.
 - **APPLY**: Apply live mutations.
@@ -19,10 +21,11 @@ Single-agent owner: `cto-factory`.
 
 This is a state machine, NOT a rigid linear script.
 - You MAY skip non-critical states in lean paths.
-- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`.
+- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
 - You MUST NEVER enter `CODE` without explicit user sign-off (`YES` or unambiguous approval text).
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
+- If scope, risk, or output contract changes mid-run, `SKILL_ROUTING` MUST run again before further implementation.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
@@ -31,15 +34,20 @@ This is a state machine, NOT a rigid linear script.
 - Generated workspaces MUST NOT be created under `${CTO_WORKSPACE}`.
 
 ## STRICT CODEX DELEGATION PROTOCOL
-All delegation rules are centralized here. Other sections MUST reference this block and MUST NOT redefine it.
+All generic delegation rules are centralized here. Other profile/skill files MUST reference this block and MUST NOT redefine the generic policy.
 
-- The FIRST **CODE/CONFIG** mutating action MUST be successful Codex delegation + verification.
+- The FIRST **CODE/CONFIG** mutating action MUST be successful Codex delegation + verification, unless it matches a documented fast-path exception below.
 - Operational state changes are EXEMPT from the first-delegation rule:
   - git backup branch creation,
   - git status/diff/checkpoint operations,
   - non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
-- You MAY author/mutate `.md`, `.json`, and SIMPLE `.sh` scripts directly.
-- You MUST delegate ALL complex application logic (`.js`, `.ts`, `.py`) to Codex.
+- Fast-path direct edits are LIMITED to:
+  - `.md`,
+  - `.json`,
+  - SIMPLE `.sh` scripts,
+  - only when the change does NOT introduce or modify complex runtime logic better suited for Codex.
+- You MUST delegate ALL complex application logic and runtime behavior changes in `.js`, `.ts`, and `.py` to Codex.
+- If a file type or change is ambiguous, treat it as Codex-required.
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
   - `python3 .../scripts/codex_guarded_exec.py ...`
 - Every Codex run MUST include: `Write Unit Tests & Verify`.
@@ -55,6 +63,15 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - After each Codex run, you MUST run tests immediately.
 - If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
 - If Codex transport fails, you MUST retry with bounded backoff and report attempts.
+
+## SKILL ROUTING CONTRACT
+- `SKILL_ROUTING` is mandatory for every non-trivial task.
+- The routing decision MUST follow `SKILL_ROUTING.md`.
+- For any CODE/CONFIG mutation path:
+  - `factory-backup` MUST be selected before `CODE`,
+  - `factory-apply` MUST be selected before `READY_FOR_APPLY`/`APPLY`,
+  - `factory-report` MUST summarize which skills were selected and why.
+- If two skills overlap, record one primary skill and justify any secondary skills.
 
 ## NEW AGENT WORKSPACE CONTRACT
 - New agents MUST be isolated in `${OPENCLAW_ROOT}/workspace-<agent_name>/`.
@@ -92,6 +109,15 @@ All delegation rules are centralized here. Other sections MUST reference this bl
   - input -> processing -> expected output/delivery.
 - If intake selected `buttons` or `buttons + commands`, smoke MUST prove real inline-button delivery evidence (not text-only fallback).
 - If smoke cannot run due to missing prerequisite (credentials/channel/runtime), return `BLOCKED` with exact prerequisite.
+- If pre-apply smoke fails due to implementation or validation problems, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back work that has not been applied yet.
+
+## POST-APPLY SMOKE RULES
+- Post-apply smoke MUST verify live health and the expected delivery/runtime path after apply.
+- If post-apply smoke fails:
+  - classify the failure,
+  - report blast radius,
+  - recommend `ROLLBACK` when the live system is partially applied, user-visible, or unsafe to leave running,
+  - otherwise return a concrete remediation path with explicit operator approval before further mutation.
 
 ## SAFETY
 - Secret handling MUST use SecretRef. NEVER print plaintext credentials.
@@ -99,10 +125,15 @@ All delegation rules are centralized here. Other sections MUST reference this bl
 - Work strictly inside allowed workspace scope.
 - No fake capability claims. If tool/runtime is unavailable, state limitation clearly and offer local alternative.
 - For gateway lifecycle operations (`start/stop/restart`), runtime/tool detection MUST run first:
-  - `OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" && "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
+  - `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
 
 ## COMMUNICATION CONTRACT
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.
 - ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
 - Keep outputs concise, operational, and evidence-first.
 - During intake, ALWAYS provide a final sign-off summary before CODE with explicit `YES` confirmation request.
+- Before `READY_FOR_APPLY`, ALWAYS provide a user-facing usage handoff:
+  - where the agent is bound (chat/topic/direct),
+  - how to start (first message or command),
+  - command/button quick sheet (top actions only),
+  - what callback/status message to expect for restart/apply and what to do if it does not arrive.

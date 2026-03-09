@@ -8,8 +8,14 @@ Before any CODE step, send one sign-off packet:
 - architecture/flow summary,
 - defaults/assumptions that were applied.
 
+For missing inputs before sign-off:
+- use only 2-3 explicit options per question,
+- avoid open-ended intake questions unless the user must provide an exact external identifier that cannot be inferred safely.
+
 Close with explicit gate text:
-- `Reply YES to approve implementation, or send corrections.`
+- `Reply YES to approve architecture and start implementation.`
+- `Reply REVISE to update requirements/architecture before coding.`
+- `Reply STOP to end at planning only.`
 
 Guard rules:
 - Do NOT treat `A`, `B`, `C`, or `READY_FOR_APPLY - A` as intake approval.
@@ -122,6 +128,19 @@ After Codex output:
 - run `openclaw config validate --json` when config changed,
 - run functional smoke scenario that matches requested business behavior,
 - include command evidence (commands + exit codes) in handoff.
+
+## READY_FOR_APPLY HANDOFF TEMPLATE (MANDATORY)
+Before presenting apply approval options, include one explicit handoff packet:
+- `What will be applied`: short diff summary (files/config/bindings/cron).
+- `Where to use it`: exact destination (agent id + chat/topic/direct binding).
+- `How to use it`: first 1-3 steps a normal user should perform right after apply.
+- `Commands/buttons`: short quick sheet (max ~6 actions, keyboard-first UX if applicable).
+- `Expected callback`: restart/apply callback text, expected arrival window, and fallback check command:
+  - `ls -t "$OPENCLAW_ROOT"/logs/cto-gateway-restart-*.log | head -1 | xargs tail -20`
+
+Guard rules:
+- Do NOT ask for `A/B/C` apply approval before this handoff packet is shown.
+- Do NOT use scaffold/engineering-only language without user usage instructions.
 
 ## KEEP-ALIVE RULE
 Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
