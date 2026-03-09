@@ -66,12 +66,15 @@ Functional smoke MUST prove:
 - if interaction mode includes buttons, prove inline button delivery evidence (text fallback alone is not sufficient).
 - if interaction mode includes buttons, menu entry command MUST produce keyboard-first output (not plain command list) unless tool send fails.
 - if interaction mode includes buttons, `/menu` success path MUST call message transport with inline keyboard payload and namespaced callback_data.
+- if interaction mode includes buttons, Codex prompt MUST contain one canonical menu transport example:
+  - `openclaw message send --channel telegram --target <chat_id>:topic:<topic_id> --message "<agent name>, menu:" --buttons '[[{"text":"<label>","callback_data":"ux:<agent_id>:<action>"}]]' --json`
 - if interaction mode includes buttons, interactive runtime gate is MANDATORY:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_interactive_agent_gate.py" --workspace "$OPENCLAW_ROOT/workspace-<agent_name>" --menu-command /menu --callback-namespace <namespace>`
 - if `COMPLEX_INTERACTIVE=YES`, smoke MUST include callback-driven usage proof:
   - trigger `/menu`,
   - execute at least two business actions through callbacks,
   - prove no full command-catalog text is returned on successful menu render.
+  - include delivery evidence from menu transport (`ok: true`, `messageId` or provider equivalent).
 
 If prerequisites for smoke are missing, return `BLOCKED` with exact missing prerequisite.
 
