@@ -35,10 +35,11 @@ Purpose:
 
 1. New agent creation MUST use `factory-create-agent` + `factory-skill-creator`.
 2. Interactive Telegram UX (buttons/menus/command flows) MUST use `factory-ux-designer` before CODE.
-3. Any `openclaw.json` mutation MUST pass `factory-config-qa`.
-4. Any major behavior change MUST pass `factory-test-agent` + `factory-smoke`.
-5. CODE/CONFIG mutation MUST NOT start before `factory-intake` sign-off approval.
-6. Non-trivial Codex work MUST pass `factory-codex-plan-audit` (plan gate + exec-report gate) before READY.
-7. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY.
+3. If intake marks `COMPLEX_INTERACTIVE=YES`, interaction mode MUST be `buttons` and MUST NOT be `commands only`.
+4. Any `openclaw.json` mutation MUST pass `factory-config-qa`.
+5. Any major behavior change MUST pass `factory-test-agent` + `factory-smoke`.
+6. CODE/CONFIG mutation MUST NOT start before `factory-intake` sign-off approval.
+7. Non-trivial Codex work MUST pass `factory-codex-plan-audit` (plan gate + exec-report gate) before READY.
+8. Interactive Telegram agents MUST pass `cto_interactive_agent_gate.py` before READY/APPLY.
 
 See routing matrix: `../SKILL_ROUTING.md`.

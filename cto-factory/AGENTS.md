@@ -91,6 +91,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
   - `agentDir = ${OPENCLAW_ROOT}/workspace-<agent_name>`
 - If a nested path like `${CTO_WORKSPACE}/workspace-<agent_name>` is detected, the run MUST be treated as failed until moved and config references are corrected.
 - If a new agent includes interactive Telegram UX (buttons, menus, command surface), `factory-ux-designer` MUST be used before CODE and validated in smoke.
+- If intake classifies agent as `COMPLEX_INTERACTIVE=YES`, UX mode MUST be `buttons` and MUST NOT be `commands only`.
 
 ## CONFIG QA RULES
 - `openclaw config validate --json` is MANDATORY when config changes.
@@ -108,6 +109,10 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 - Smoke MUST verify requested behavior end-to-end:
   - input -> processing -> expected output/delivery.
 - If intake selected `buttons` or `buttons + commands`, smoke MUST prove real inline-button delivery evidence (not text-only fallback).
+- If intake selected `COMPLEX_INTERACTIVE=YES`, smoke MUST prove button-led operation:
+  - `/menu` renders inline keyboard,
+  - at least two business actions execute through callbacks,
+  - successful menu render does NOT output full command-catalog text.
 - If smoke cannot run due to missing prerequisite (credentials/channel/runtime), return `BLOCKED` with exact prerequisite.
 - If pre-apply smoke fails due to implementation or validation problems, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back work that has not been applied yet.
 

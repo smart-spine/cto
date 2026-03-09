@@ -110,6 +110,8 @@ For new agent tasks, prompt MUST enforce:
   - avoid reserved command collisions,
   - include graceful interrupt command (`/cancel` or equivalent),
   - include callback/button safety checks in tests/smoke.
+  - if intake marks `COMPLEX_INTERACTIVE=YES`, interaction mode MUST be `buttons` (button-led UX).
+  - for `COMPLEX_INTERACTIVE=YES`, do NOT implement command-catalog-driven UX as primary path.
   - if interaction mode is `buttons`, menu success response MUST be inline-keyboard only (no command list body).
   - if interaction mode is `buttons + commands`, menu success response MUST still be keyboard-first with only a short command hint.
 - Skill package minimum:

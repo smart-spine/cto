@@ -12,6 +12,15 @@ Use this skill whenever a created/updated agent has an interactive interface:
 Prevent UX breakage caused by command collisions, missing cancel paths, and unhandled callbacks.
 
 ## MANDATORY RULES
+0. Complexity mode gate:
+   - classify agent UX as `COMPLEX_INTERACTIVE` if ANY is true:
+     - two or more business modes,
+     - user-managed settings/list/schedule controls,
+     - long-running actions with cancel/status,
+     - more than 5 primary user actions.
+   - for `COMPLEX_INTERACTIVE`, interface mode MUST be `buttons` (button-led).
+   - in `COMPLEX_INTERACTIVE`, plain command flows MUST NOT be the primary UX path.
+
 1. Graceful interrupts:
    - any long-running action MUST expose an interrupt path (`/cancel` or equivalent),
    - include status visibility (`/status` or equivalent) for in-progress jobs,
@@ -34,6 +43,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
    - `/menu` (or equivalent entry command) MUST be keyboard-first:
      - send inline keyboard as primary output,
      - do NOT dump a long command list in the same success response,
+     - for `COMPLEX_INTERACTIVE`: menu MUST be buttons-only on success (no command list body, no command-catalog text),
      - in `buttons` mode: menu MUST be buttons-only on success (no command list body),
      - in `buttons + commands` mode: menu MAY include one short fallback hint only (`Use /<cmd>`), not full command catalog,
      - text menu is allowed only as explicit fallback when button-send tool call fails.
@@ -50,6 +60,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
 ## REQUIRED DELIVERABLES
 For interactive agents, produce:
 - command map (user intents -> command/callback -> handler),
+- button map (button label -> callback payload -> handler),
 - reserved-command safety checklist,
 - interrupt/cancel behavior spec,
 - UX smoke checklist (at least one run covering button + text fallback + cancel path).
@@ -69,5 +80,8 @@ Before `READY_FOR_APPLY`:
 5. Menu keyboard send is proven in runtime tests:
    - tests assert inline keyboard payload exists (`buttons` or `reply_markup.inline_keyboard`),
    - tests assert callbacks route to real handlers.
+6. For `COMPLEX_INTERACTIVE`:
+   - tests MUST verify menu success output is buttons-only,
+   - tests MUST verify at least two business actions are reachable via callbacks (without typing commands).
 
 If any check fails, return `BLOCKED: UX_CONTRACT_NOT_SATISFIED`.
