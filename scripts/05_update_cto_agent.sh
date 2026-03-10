@@ -216,7 +216,6 @@ defaults["timeoutSeconds"] = agent_timeout_seconds
 
 agent_list = agents.setdefault("list", [])
 cto_heartbeat = {
-    "enabled": True,
     "every": "5m",
     "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
     "target": "none",

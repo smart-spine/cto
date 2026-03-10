@@ -284,7 +284,6 @@ cto_payload = {
     "agentDir": str(openclaw_home / "agents/cto-factory/agent"),
     "model": {"primary": cto_model},
     "heartbeat": {
-        "enabled": True,
         "every": "5m",
         "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
         "target": "none",
