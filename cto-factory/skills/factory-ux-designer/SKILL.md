@@ -51,6 +51,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
    - callback payloads for `/menu` buttons MUST use `callback_data` with namespace `ux:<agent_id>:<action>`.
    - canonical button-send shape for `/menu` (use this exact transport pattern; substitute target and callbacks):
      - `openclaw message send --channel telegram --target <chat_id>:topic:<topic_id> --message "<agent name>, menu:" --buttons '[[{"text":"<label>","callback_data":"ux:<agent_id>:<action>"}]]' --json`
+   - **CRITICAL**: The `--buttons` argument MUST be a valid, properly serialized JSON string (a 2D array of button objects). When calling this CLI from code (e.g. Python `subprocess` or Node `child_process`), ALWAYS use the language's native JSON serialization (e.g. `json.dumps` or `JSON.stringify`) instead of trying to format it manually to avoid escaping errors that break the keyboard transport.
    - `/menu` success acknowledgement SHOULD be one short line (`Menu sent.` or equivalent); no command catalog on success.
 
 5. Output/schema safety:

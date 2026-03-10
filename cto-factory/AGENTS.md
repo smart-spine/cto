@@ -41,11 +41,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
   - git backup branch creation,
   - git status/diff/checkpoint operations,
   - non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
-- Fast-path direct edits are LIMITED to:
-  - `.md`,
-  - `.json`,
-  - SIMPLE `.sh` scripts,
-  - only when the change does NOT introduce or modify complex runtime logic better suited for Codex.
+- You MUST use the codex delegation tool for all file creations and edits. NO DIRECT EDITS ALLOWED.
 - You MUST delegate ALL complex application logic and runtime behavior changes in `.js`, `.ts`, and `.py` to Codex.
 - If a file type or change is ambiguous, treat it as Codex-required.
 - You MUST use guarded delegation path (no naked raw fallback in normal flow):
@@ -139,7 +135,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 - For any command likely to exceed 90 seconds, you MUST dispatch through async supervisor flow (`cto_async_task.py`) with heartbeat callbacks enabled.
 - If async callback delivery fails, you MUST keep retrying callback delivery and report fallback status in-session at least every 90 seconds until terminal state.
 - You MUST continue task execution autonomously until `DONE` or a concrete blocker is reached.
-- If blocked, you MUST report the blocker immediately with exact command/error evidence and the next required user action.
+- If blocked or if you encounter an unresolvable error, you MUST NOT silently terminate or crash. You MUST immediately send a message to the user reporting the exact command/error evidence and ask for the next required user action. Then, pause and wait for the user's response.
 - If an `exec` call returns `Command still running (session ...)`, you MUST immediately start process polling and continue until terminal status (`completed` or `failed`).
 - For interactive Telegram/user turns, each `process(action=poll, ...)` call MUST use a short timeout (`timeout=45000`).
 - You MUST NOT use `timeout>=120000` polling inside an active interactive turn, because it can trigger embedded run timeout.

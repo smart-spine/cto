@@ -1,12 +1,55 @@
-.DS_Store
-*.log
-*.tmp
-*.bak
-*.bak.*
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Secrets and credentials
 .env
 .env.*
-.openclaw/
+*.env
+*.env.*
+cto-factory.env
+credentials/
+secrets/
+identity/
+**/auth-profiles.json
+**/models.json
+**/.git.removed-*
+
+# Runtime state and queues
+logs/
+delivery-queue/
+telegram/
+devices/
+memory/
+subagents/
+cron/jobs.json
+cron/runs/
+cron/*.bak
+cron/*.json.bak
+update-check.json
+openclaw.json.bak*
+
+# Sessions and transient traces
+agents/*/sessions/
+**/sessions.json
+*.jsonl.reset.*
+*.jsonl.deleted.*
+**/.openclaw/
+**/.cto-brain/
+**/.sandboxes/
+**/.sandboxes.bak.*/
+**/runner.log
+**/config/state.json
+**/*-state.json
+
+# Browser / UI runtime artifacts
+browser/
+canvas/
+completions/
+
+# Dependency and build artifacts
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

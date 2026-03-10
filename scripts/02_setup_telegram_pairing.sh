@@ -196,10 +196,7 @@ main() {
   [[ -f "${OPENCLAW_HOME}/openclaw.json" ]] || die "Missing ${OPENCLAW_HOME}/openclaw.json. Run Script 1 first."
   [[ -f "${OPENCLAW_HOME}/.env" ]] || die "Missing ${OPENCLAW_HOME}/.env. Run Script 1 first."
 
-  log_info "Stage 1/7: Collecting Telegram bot token."
-  user_section "User input required"
-  user_step "Paste your Telegram bot token when prompted."
-  user_step "Variable: TELEGRAM_BOT_TOKEN"
+  log_info "Stage 1/6: Collecting Telegram bot token."
   prompt_secret TELEGRAM_BOT_TOKEN "Enter TELEGRAM_BOT_TOKEN"
   upsert_env_var "${OPENCLAW_HOME}/.env" "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN}"
 
@@ -226,12 +223,7 @@ main() {
   fi
 
   log_info "Stage 6/7: Waiting for pairing trigger from user."
-  user_section "User action required for Telegram pairing"
-  user_step "1) Open direct chat with your Telegram bot."
-  user_step "2) If this is the first time, press Start in Telegram."
-  user_step "3) Send any message to the bot."
-  user_step "4) Wait for the 'pairing required' reply."
-  user_step "5) Return to this terminal and press ENTER to continue."
+  echo "Please send any message to your Telegram bot. Press ENTER here when you receive the 'pairing required' message from the bot."
   if [[ "${AUTO_CONFIRM}" != "true" ]]; then
     if [[ "${NON_INTERACTIVE}" == "true" ]]; then
       die "AUTO_CONFIRM must be true when NON_INTERACTIVE=true."
@@ -245,9 +237,7 @@ main() {
   local pairing_code=""
   if ! pairing_code="$(wait_for_pairing_code)"; then
     log_warn "No pending pairing code found within ${TELEGRAM_PAIRING_TIMEOUT_SECONDS}s."
-    user_section "Manual pairing fallback"
-    user_step "When the Telegram pairing code appears, run:"
-    user_command "openclaw pairing approve telegram <PAIRING_CODE>"
+    log_warn "Run manually when you receive a code: openclaw pairing approve telegram <PAIRING_CODE>"
     exit 0
   fi
   pending_json="$(fetch_pairing_requests_json)"

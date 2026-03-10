@@ -1,7 +1,7 @@
 # TOOLS
 
 Allowed:
-- `read`, `write`, `edit`, `apply_patch`
+- `read` (All file mutations MUST be done via codex, `write`, `edit`, `apply_patch` tools are STRICTLY FORBIDDEN)
 - `exec` for deterministic commands
 - `sessions_spawn` for cross-agent runtime testing/orchestration
 - `sessions_list`, `sessions_history`, `sessions_send`, `session_status` for agent orchestration

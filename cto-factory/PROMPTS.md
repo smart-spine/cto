@@ -157,4 +157,4 @@ Inside interactive Telegram/user turns, process polling MUST use short timeout `
 You MUST NOT block an interactive turn with poll timeouts `>=120000`.
 Long polls (`timeout=1200000`) are allowed only in detached async supervisor mode where the current user turn is already returned.
 Send one short progress note before each poll cycle and another note immediately after each poll result.
-If timeout/abort happens during polling, run recovery in-session (`process list` -> resume poll or finalize verification) and do not wait for user ping.
+- If timeout/abort happens during polling, you MUST immediately freeze and ask the user for explicit permission or instructions on how to proceed.

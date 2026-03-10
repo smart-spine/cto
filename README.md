@@ -1,139 +1,103 @@
-# CTO Bot Deployment (OpenClaw + OpenAI)
+# CTO Agent Deployment Pack (OpenClaw)
 
-This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`).
+This repo installs OpenClaw and deploys a CTO agent (`cto-factory`) that delegates implementation to **Codex CLI**.
 
-What CTO bot is for:
-- safer agent creation workflow
-- controlled rollout with backup and rollback
-- config validation before apply
-- operational helper flows for OpenClaw
+Implementation policy inside CTO agent:
+- code generation must go through `codex`
+- configuration must pass `openclaw config validate --json`
+- deployment flow follows guarded steps (backup, test, validate, apply)
 
-This deployment package is tuned for **OpenAI API** (not OpenRouter).
+## What You Need
 
-## Prerequisites
+- An EC2 Ubuntu server (SSH access as `ubuntu` with `sudo`)
+- OpenAI API key
+- Telegram bot token (if using Telegram)
+- Telegram destination:
+  - topic link (for example `https://t.me/c/1234567890/42` - just copy from the topic page), or
+  - direct chat with your bot
+- Your Telegram user ID you can get it via @userinfobot in Telegram
 
-You need:
-- Ubuntu EC2 host
-- SSH access as user `ubuntu` with `sudo`
-- OpenAI API key (Pay-as-you-go), instruction provided in the first step
-- Telegram bot token (from BotFather)
-- Telegram numeric user ID
+## Recommended Install Order
 
-Out of scope in this guide:
-- EC2 provisioning
-- SSH key setup
-
-If needed, use AWS docs:
-- <https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html>
-
-## Deploy On A Clean EC2
-
-### 0) Get required tokens first
-
-Before running any script on EC2, prepare both tokens:
-- `OPENAI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
-
-#### 0.1) Create OpenAI API key
-
-1. Open [OpenAI Platform](https://platform.openai.com/) and sign in.
-2. Enable billing (Pay-as-you-go) for API usage.
-3. Open [API Keys](https://platform.openai.com/api-keys) and create a new secret key.
-4. Copy it once and store it in your password manager.
-
-Notes:
-- The key usually starts with `sk-...`
-- You will paste it into Script `01` when prompted.
-
-#### 0.2) Create Telegram bot token
-
-In BotFather:
-- create a bot
-- copy bot token
-
-Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
-
-### 1) Bootstrap dependencies and clone repo
-
-Run on the server:
+### 0) Bootstrap dependencies
+Run this on the server first:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/smart-spine/cto/main/scripts/00_bootstrap_dependencies.sh | bash
+curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/main/scripts/00_bootstrap_dependencies.sh | bash
 ```
 
-Script `00` will:
-- install base dependencies
-- clean stale NodeSource apt entries (if present)
-- clone this repo into `~/cto`
-- try to switch you into `~/cto`
-- print color-highlighted next steps
+What this does:
+- installs base dependencies
+- clones this repo to `~/cto-agent`
+- uses `main` by default (no automatic switch to `codex/*` branches)
+- prints next commands
 
-If shell handoff is not available (common with `curl | bash`), run the command below and continue:
+## Standard Install Order
+Run from repo root:
 
 ```bash
-cd ~/cto
+cd ~/cto-agent
+chmod +x scripts/lib/common.sh scripts/00_bootstrap_dependencies.sh scripts/01_install_openclaw.sh scripts/02_setup_telegram_pairing.sh scripts/03_deploy_cto_agent.sh
 ```
 
-<img src="docs/images/deploy-console/01-bootstrap-console.png" alt="Bootstrap dependencies and clone repo console output" width="960">
-
-### 2) Install OpenClaw + Codex CLI
+### 1) Install OpenClaw + Codex + local runtime config
 
 ```bash
 ./scripts/01_install_openclaw.sh
 ```
 
-What Script `01` asks from you:
+Script 1 will ask for:
 - `OPENAI_API_KEY`
+- gateway token mode:
+  - auto-generate (recommended)
+  - manual input
 
-What Script `01` does:
-- installs Node.js, OpenClaw CLI, Codex CLI
-- authenticates Codex CLI with your OpenAI API key
-- runs Codex connectivity healthcheck with retries
-- writes runtime files under `~/.openclaw`
-- auto-generates `OPENCLAW_GATEWAY_TOKEN` if missing and stores it in `~/.openclaw/.env`
+This deployment pack is tuned for **OpenAI only**.
 
-<img src="docs/images/deploy-console/02-install-console.png" alt="OpenClaw and Codex CLI installation console output" width="960">
-
-### 3) Connect Telegram and approve pairing
+### 2) Telegram setup + pairing
 
 ```bash
 ./scripts/02_setup_telegram_pairing.sh
 ```
 
-What Script `02` asks from you:
-- `TELEGRAM_BOT_TOKEN`
-
-What Script `02` does:
-- enables Telegram plugin
-- writes token into OpenClaw config
+What script 2 does:
+- enables Telegram plugin if disabled
+- configures bot token
+- validates config
 - restarts gateway
-- waits for pairing trigger
+- waits for pairing request
 - auto-approves pairing code
+- auto-whitelists paired user ID in Telegram allowlists
 
-When the script pauses for pairing:
-1. Open direct chat with your Telegram bot.
-2. If this is the first time, press `Start` in Telegram.
-3. Send any message to the bot.
-4. Wait for the `pairing required` reply.
-5. Return to the terminal and press `ENTER`.
-6. When pairing is approved, copy the Telegram user ID printed in the console.
-
-<img src="docs/images/deploy-console/03-pairing-console.png" alt="Telegram pairing console output" width="960">
-
-### 4) Deploy CTO agent (direct chat binding)
+### 3) Deploy CTO agent and choose Telegram binding mode
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
 ```
 
-Script `03` deploys `cto-factory` and binds it to **direct chat** with your Telegram user.
-When prompted for the Telegram user ID, paste the ID that Script `02` printed after pairing approval.
+The script now asks where to bind the CTO bot:
+- `topic`: paste a Telegram topic link, and the script auto-parses group/topic
+  - supports `https://t.me/c/<group>/<topic>`
+  - also supports links like `https://t.me/<public_group_username>/<topic>` (requires valid bot token to resolve group ID)
+- `direct`: bind to direct chat with a Telegram user ID
 
-<img src="docs/images/deploy-console/04-deploy-console.png" alt="CTO agent deployment console output" width="960">
+Non-interactive examples:
 
-## Verify Deployment
+```bash
+# Topic binding via link
+NON_INTERACTIVE=true \
+BIND_MODE=topic \
+BIND_TELEGRAM_LINK="https://t.me/c/1234567890/42" \
+./scripts/03_deploy_cto_agent.sh
 
-Run on server:
+# Direct-chat binding
+NON_INTERACTIVE=true \
+BIND_MODE=direct \
+BIND_DIRECT_USER_ID="7153051303" \
+./scripts/03_deploy_cto_agent.sh
+```
+
+## [AUTO]Post-Install Checks
 
 ```bash
 openclaw --version
@@ -142,146 +106,91 @@ openclaw config validate --json
 openclaw health --json
 ```
 
-Local CTO smoke:
+Quick local smoke:
 
 ```bash
 openclaw agent --local --agent cto-factory --message "Reply with CTO_FACTORY_OK" --json
 ```
 
-## First Run Checklist
+## Common Failures and Fixes
 
-1. Open direct chat with your bot.
-2. Send a simple test message.
-3. Verify CTO replies.
+### `Malformed entry ... /etc/apt/sources.list.d/nodesource.sources (URI)`
 
-Prompt example for first real task:
+Cause: broken stale NodeSource source file from previous installs.
 
-```text
-Create a new Reddit monitoring agent for OpenClaw topics.
-It should monitor selected subreddits via RSS and post updates to Telegram.
-Start with your intake survey, collect missing decisions, then run your normal build pipeline and stop at READY_FOR_APPLY.
-```
-
-## Example Workflow: CTO Builds and Fixes a Real Agent
-
-This is the fastest way to understand how the CTO bot is meant to be used in practice. The example below shows one real loop end-to-end: requirements intake, Codex-backed build, a failed smoke test, an in-place fix, a successful retest, an apply action, and final Telegram output.
-
-### 1) Start with the outcome, not with implementation details
-
-Ask for the agent you want. The CTO bot should stop and run intake before coding.
-
-<img src="docs/images/example-workflow/01-intake-survey.png" alt="CTO intake survey for a Reddit monitoring agent" width="960">
-
-### 2) Expect build evidence, not just a success claim
-
-The CTO bot should show Codex delegation, generated workspace/files, test execution, and config validation before it says `READY_FOR_APPLY`.
-
-<img src="docs/images/example-workflow/02-build-evidence.png" alt="Codex delegation and validation evidence" width="960">
-
-### 3) Force a live smoke test
-
-A good CTO agent does not stop at green unit tests. It should run a real smoke test against the actual delivery path and report the exact failure if something breaks.
-
-<img src="docs/images/example-workflow/03-smoke-failure.png" alt="Smoke test failure with exact delivery error" width="960">
-
-### 4) Fix the existing agent in place
-
-You do not need to rebuild from scratch. Here the CTO bot was told to fix the existing Reddit agent, keep behavior intact, rerun tests, and validate config before apply.
-
-<img src="docs/images/example-workflow/04-targeted-fix.png" alt="Targeted fix for the existing agent with Codex-backed evidence" width="960">
-
-### 5) Retest and prove delivery
-
-After the fix, the bot was re-tested and returned delivery evidence with `sent: true` and no fallback, then it was asked to run the agent immediately.
-
-<img src="docs/images/example-workflow/05-successful-smoke.png" alt="Successful smoke test and run-now validation" width="960">
-
-### 6) Apply after verification
-
-Once the change is verified, you can ask the CTO bot to apply it. In this case it dispatched a gateway restart callback so the updated production binding would be loaded.
-
-<img src="docs/images/example-workflow/06-apply-changes.png" alt="Apply request and production restart step" width="960">
-
-### 7) Final result in Telegram
-
-The finished agent posts raw Reddit items first, then adds a concise summary for that run.
-
-<img src="docs/images/example-workflow/07-live-output.png" alt="Live Telegram output from the Reddit agent" width="960">
-
-What this example demonstrates:
-- The CTO bot should ask questions before coding when requirements are incomplete.
-- Code changes should be routed through `codex`, not hand-written inline by the manager agent.
-- Every meaningful change should be backed by tests and `openclaw config validate --json`.
-- A real smoke test matters more than a green unit test when Telegram delivery is part of the workflow.
-- You can iterate on the same agent safely by tightening prompts and forcing another test cycle.
-
-## Advanced: Rebind CTO To Group Topic
-
-Default flow uses direct chat only.
-
-For advanced users, to route CTO into a Telegram group topic after Script `03`:
-
+Fix:
 ```bash
-./scripts/04_rebind_cto_to_topic.sh
+sudo rm -f /etc/apt/sources.list.d/nodesource.sources /etc/apt/sources.list.d/nodesource.list /etc/apt/sources.list.d/nodesource.list.save
+sudo apt-get update
 ```
 
-You can pass either:
-- `BIND_TELEGRAM_LINK="https://t.me/c/<group>/<topic>"`
-- or explicit `BIND_GROUP_ID` + `BIND_TOPIC_ID`
+### `Unknown channel: telegram`
 
-## Update CTO Agent (Existing Install)
+Cause: Telegram plugin is disabled.
 
-When new CTO changes are released, run:
-
+Fix:
 ```bash
-cd ~/cto
-./scripts/05_update_cto_agent.sh
+openclaw plugins enable telegram
+./scripts/02_setup_telegram_pairing.sh
 ```
 
-What Script `05` does:
-- updates this repository to latest `main` by default
-- creates rollback backup under `~/.openclaw/backups/cto-update-<timestamp>`
-- syncs updated `cto-factory` files into `~/.openclaw/workspace-factory`
-- validates `openclaw.json`
-- restarts gateway and runs CTO smoke check
+### Pairing message arrived, but script says no pending code
 
-Useful options:
-- `UPDATE_REPO=false` (skip git pull, use local repo state)
-- `CTO_REPO_REF=<tag-or-branch>` (pin update source)
-- `SKIP_CTO_HEALTH_SMOKE=true` (skip local agent smoke)
-- `RESTART_GATEWAY=false` (update files/config without restart)
+Cause: timing race or insufficient wait.
 
-## BETA Notes (Existing OpenClaw Installation)
-
-> BETA: Scripts are designed to be additive, but this is not zero-risk for a busy multi-agent host.
-
-Recommended before deployment:
-
+Fix:
 ```bash
-cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.manual-backup.$(date +%Y%m%d-%H%M%S)
+export TELEGRAM_PAIRING_TIMEOUT_SECONDS=180
+./scripts/02_setup_telegram_pairing.sh
 ```
 
-Known side effects in existing installs:
-- gateway restarts can interrupt active runs
-- global Telegram policy fields can be updated for CTO routing
-- tool-level global settings may be updated (`tools.sessions.visibility`, `tools.agentToAgent`)
+### `You are not authorized to use this command`
 
-Use a maintenance window for production systems.
+Cause: group policy is `allowlist`, but sender ID is not in allowlists.
 
-## Uninstall / Rollback Script
+Fix:
+- run script 2 again with `PAIRING_TELEGRAM_USER_ID` set
+- or manually add user ID to:
+  - `channels.telegram.groupAllowFrom`
+  - `channels.telegram.accounts.default.groupAllowFrom`
+  - `channels.telegram.groups["<group_id>"].allowFrom`
 
-To remove OpenClaw/CTO stack from the host:
-
-```bash
-./scripts/99_uninstall_openclaw.sh
-```
-
-Options:
-- `REMOVE_REPO=true` to also delete `~/cto`
-- `WIPE_NODE_STACK=true` (default) to remove Node/OpenClaw/Codex binaries
+Then restart gateway.
 
 ## Security Notes
 
-- Never commit real API keys or Telegram tokens.
-- Keep secrets in `~/.openclaw/.env` with strict permissions.
-- Keep gateway token in a password manager.
+- Never commit real API keys or bot tokens.
+- Keep secrets in `.env` or SecretRef-backed files.
+- Do not put plaintext tokens in public config files.
+
+## Runtime User Model (Read This Carefully)
+
+Current behavior in this repo:
+- **OpenClaw runs as the same Linux user that runs the scripts** (typically `ubuntu` on EC2).
+- No dedicated `openclaw` OS user is created automatically.
+
+### Evidence (from this repo)
+
+- `scripts/01_install_openclaw.sh` sets:
+  - `OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"`
+  - this resolves to the current user home by default (for EC2, `/home/ubuntu/.openclaw`).
+- `scripts/lib/common.sh` starts gateway with `nohup openclaw gateway run ...` in the current user context.
+- `scripts/01_install_openclaw.sh` configures gateway with:
+  - `gateway.bind = "loopback"` (not public bind by default)
+  - `gateway.auth.mode = "token"` with `OPENCLAW_GATEWAY_TOKEN`
+- `scripts/lib/common.sh` writes `.env` with `chmod 600`.
+
+### Is this safe?
+
+For a **single-tenant dev VM** or controlled internal setup, this is generally acceptable because:
+- gateway is loopback-bound by default,
+- token auth is enabled,
+- secrets are kept in user-owned state files.
+
+### Risks you should explicitly accept
+
+- The `ubuntu` account becomes a larger trust boundary:
+  - compromise of that account exposes OpenClaw state and secrets under `$HOME/.openclaw`.
+- Process isolation is weaker than a hardened dedicated service account/container setup.
+- Any other workload running as `ubuntu` can potentially read or alter the same user-scoped files.
+- Operational mistakes in `ubuntu` shell context can affect OpenClaw runtime and config directly.
