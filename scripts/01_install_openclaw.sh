@@ -21,7 +21,7 @@ OPENCLAW_PORT="${OPENCLAW_PORT:-18789}"
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-3600}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
-GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-prompt}"
+GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-auto}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 SKIP_CODEX_LOGIN="${SKIP_CODEX_LOGIN:-false}"
@@ -198,27 +198,13 @@ resolve_gateway_token() {
   fi
 
   case "${GATEWAY_TOKEN_MODE}" in
-    auto)
+    auto|prompt|"")
       OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
       GATEWAY_TOKEN_GENERATED="true"
       log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
       ;;
     manual)
       prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      ;;
-    prompt|"")
-      echo "Choose OPENCLAW_GATEWAY_TOKEN setup:"
-      echo "  1) Auto-generate now (recommended)"
-      echo "  2) Enter manually"
-      local choice=""
-      read -r -p "Choice [1/2] (default 1): " choice
-      if [[ "${choice}" == "2" ]]; then
-        prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      else
-        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-        GATEWAY_TOKEN_GENERATED="true"
-        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
-      fi
       ;;
     *)
       die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
@@ -400,7 +386,7 @@ main() {
   user_section "User input required"
   user_step "Paste your OpenAI API key when prompted."
   user_step "Variable: OPENAI_API_KEY"
-  user_step "You can control gateway token mode via GATEWAY_TOKEN_MODE=prompt|auto|manual."
+  user_step "OPENCLAW_GATEWAY_TOKEN will be auto-generated unless you explicitly set GATEWAY_TOKEN_MODE=manual."
   prompt_secret OPENAI_API_KEY "Enter OPENAI_API_KEY"
   resolve_gateway_token
 

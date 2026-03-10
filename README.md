@@ -92,6 +92,10 @@ What Script `01` does:
 - writes runtime files under `~/.openclaw`
 - auto-generates `OPENCLAW_GATEWAY_TOKEN` if missing and stores it in `~/.openclaw/.env`
 
+If this step looks stuck for more than 5 minutes during Node.js setup:
+- press `ENTER` once in the same terminal.
+- some Ubuntu hosts show an interactive `needrestart` prompt (for example, `Pending kernel upgrade`) that pauses `apt` until you confirm.
+
 <img src="docs/images/deploy-console/02-install-console.png" alt="OpenClaw and Codex CLI installation console output" width="960">
 
 ### 3) Connect Telegram and approve pairing
