@@ -215,6 +215,13 @@ defaults = agents.setdefault("defaults", {})
 defaults["timeoutSeconds"] = agent_timeout_seconds
 
 agent_list = agents.setdefault("list", [])
+cto_heartbeat = {
+    "enabled": True,
+    "every": "5m",
+    "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
+    "target": "none",
+    "ackMaxChars": 300,
+}
 existing = None
 for item in agent_list:
     if isinstance(item, dict) and item.get("id") == "cto-factory":
@@ -229,6 +236,7 @@ if existing is None:
         "workspace": str(openclaw_home / "workspace-factory"),
         "agentDir": str(openclaw_home / "agents/cto-factory/agent"),
         "model": {"primary": cto_model},
+        "heartbeat": cto_heartbeat,
         "identity": {
             "name": "CTO Factory Agent",
             "theme": "engineering",
@@ -241,6 +249,7 @@ else:
     existing["name"] = existing.get("name") or "CTO Factory"
     existing["workspace"] = str(openclaw_home / "workspace-factory")
     existing["agentDir"] = str(openclaw_home / "agents/cto-factory/agent")
+    existing["heartbeat"] = cto_heartbeat
     if force_model_update:
         existing["model"] = {"primary": cto_model}
     else:

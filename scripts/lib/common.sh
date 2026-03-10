@@ -6,6 +6,24 @@ timestamp_utc() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+init_terminal_colors() {
+  if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
+    C_RESET=$'\033[0m'
+    C_BOLD=$'\033[1m'
+    C_CYAN=$'\033[36m'
+    C_GREEN=$'\033[32m'
+    C_YELLOW=$'\033[33m'
+  else
+    C_RESET=""
+    C_BOLD=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+  fi
+}
+
+init_terminal_colors
+
 log_info() {
   printf "[%s] [INFO] %s\n" "$(timestamp_utc)" "$*"
 }
@@ -16,6 +34,18 @@ log_warn() {
 
 log_error() {
   printf "[%s] [ERROR] %s\n" "$(timestamp_utc)" "$*" >&2
+}
+
+user_section() {
+  printf "\n%s%s%s\n" "${C_BOLD}${C_CYAN}" "$*" "${C_RESET}"
+}
+
+user_step() {
+  printf "%s%s%s\n" "${C_GREEN}" "$*" "${C_RESET}"
+}
+
+user_command() {
+  printf "  %s%s%s\n" "${C_YELLOW}" "$*" "${C_RESET}"
 }
 
 die() {
