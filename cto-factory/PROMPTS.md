@@ -148,6 +148,7 @@ Guard rules:
 
 ## KEEP-ALIVE RULE
 Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
+**CRITICAL**: You MUST include the tool call that starts the long-running task in the EXACT SAME TURN as your pre-message. Never send a text message saying you are about to start without actually invoking the execution tool in the same response. Doing so will stall the execution and force the user to ping you.
 You MUST NEVER become silent while a task is active. If execution is still running, send progress/heartbeat updates at least every 90 seconds.
 For tasks expected to run longer than 90 seconds, dispatch via async supervisor (`cto_async_task.py`) with callback heartbeats.
 If callback delivery fails, retry automatically and send fallback in-session status until completion or hard block.

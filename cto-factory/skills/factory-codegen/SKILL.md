@@ -57,7 +57,10 @@ Procedure for code tasks:
 3. Add provider/model context from current `openclaw.json` and state whether provider switch is allowed.
 4. PLAN phase delegation (Codex MUST plan before coding):
    - prompt codex to return only `CODEX_PLAN_JSON_BEGIN/END` block.
-   - run guarded wrapper and capture output.
+   - run guarded wrapper and capture output. For long codex runs, you MUST wrap the command in the async supervisor:
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id>-plan --cwd <root_project_workspace> --cmd "<codex_guarded_exec command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+   - when async path is used, poll status/log via `cto_async_task.py status|tail` and continue reporting until terminal state.
+   - DO NOT pass `background=true` when executing this command.
    - validate plan block:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <requirements_json> --codex-output-file <plan_output_txt>`
    - if plan gate fails, send gap list back to Codex and rerun PLAN phase.
@@ -81,6 +84,7 @@ Procedure for code tasks:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report --requirements-file <requirements_json> --codex-output-file <exec_output_txt>`
    - if report gate fails, send missing requirement ids to Codex and rerun IMPLEMENT phase.
 7. Apply Codex-produced output.
+8. **SESSION RESET**: If the applied output modified any base profile files (`PROMPTS.md`, `AGENTS.md`, `IDENTITY.md`, `TOOLS.md`) of an existing agent, you MUST explicitly clear or reset that target agent's session context. Old session contexts will continue using outdated instructions and block the new rules from taking effect.
 8. If `openclaw.json` was modified, IMMEDIATELY run `OPENCLAW_CONFIG_PATH=<path_to_openclaw.json> openclaw config validate --json`. If validation fails, capture the errors and delegate a fix back to Codex before proceeding.
 9. Run deterministic tests immediately.
 10. If tests fail, delegate a fix to Codex and rerun tests until green.

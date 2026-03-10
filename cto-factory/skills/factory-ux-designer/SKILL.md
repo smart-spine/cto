@@ -41,6 +41,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
    - if buttons are provided, a text-command fallback MUST exist,
    - both paths MUST map to the same validated handler logic.
    - `/menu` MUST exist for interactive agents and MUST be the primary entry command.
+   - **CRITICAL**: For Telegram-bound agents, do NOT respect or check "webchat capabilities=none" to fallback to text menus. The Telegram channel natively supports inline keyboards, so assume full button capabilities for Telegram targets and force the keyboard layout.
    - `/menu` MUST be keyboard-first:
      - send inline keyboard as primary output,
      - do NOT dump a long command list in the same success response,
