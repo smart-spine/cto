@@ -47,8 +47,8 @@ remove_state_dirs() {
   run_as_root rm -rf /root/.openclaw /root/.codex
 
   if [[ "${REMOVE_REPO}" == "true" ]]; then
-    log_info "REMOVE_REPO=true -> removing ~/cto repository clone."
-    rm -rf "$HOME/cto"
+    log_info "REMOVE_REPO=true -> removing repository clones (~/cto, ~/cto-agent) if present."
+    rm -rf "$HOME/cto" "$HOME/cto-agent"
   fi
 }
 

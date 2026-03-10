@@ -58,20 +58,20 @@ Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-ag
 Run on the server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/smart-spine/cto-agent/main/scripts/00_bootstrap_dependencies.sh | bash
+curl -fsSL https://raw.githubusercontent.com/smart-spine/cto/main/scripts/00_bootstrap_dependencies.sh | bash
 ```
 
 Script `00` will:
 - install base dependencies
 - clean stale NodeSource apt entries (if present)
-- clone this repo into `~/cto-agent`
-- try to switch you into `~/cto-agent`
+- clone this repo into `~/cto`
+- try to switch you into `~/cto`
 - print color-highlighted next steps
 
 If shell handoff is not available (common with `curl | bash`), run the command below and continue:
 
 ```bash
-cd ~/cto-agent
+cd ~/cto
 ```
 
 <img src="docs/images/deploy-console/01-bootstrap-console.png" alt="Bootstrap dependencies and clone repo console output" width="960">
@@ -234,7 +234,7 @@ You can pass either:
 When new CTO changes are released, run:
 
 ```bash
-cd ~/cto-agent
+cd ~/cto
 ./scripts/05_update_cto_agent.sh
 ```
 
@@ -277,7 +277,7 @@ To remove OpenClaw/CTO stack from the host:
 ```
 
 Options:
-- `REMOVE_REPO=true` to also delete `~/cto-agent`
+- `REMOVE_REPO=true` to also delete `~/cto` (and legacy `~/cto-agent` if present)
 - `WIPE_NODE_STACK=true` (default) to remove Node/OpenClaw/Codex binaries
 
 ## Security Notes

@@ -145,7 +145,7 @@ resolve_default_repo_dir() {
       fi
     fi
   fi
-  printf "%s/cto-agent" "${base_home}"
+  printf "%s/cto" "${base_home}"
 }
 
 resolve_repo_branch() {
@@ -235,7 +235,7 @@ enter_repo_shell_if_interactive() {
 }
 
 main() {
-  local repo_url="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
+  local repo_url="${CTO_REPO_URL:-https://github.com/smart-spine/cto.git}"
   local requested_branch="${CTO_REPO_BRANCH:-main}"
   local default_repo_dir
   default_repo_dir="$(resolve_default_repo_dir)"

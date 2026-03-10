@@ -18,7 +18,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
-CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
+CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/smart-spine/cto.git}"
 CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
 BIND_MODE="${BIND_MODE:-}"
@@ -30,6 +30,7 @@ TELEGRAM_ALLOWED_USER_ID="${TELEGRAM_ALLOWED_USER_ID:-}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 
 TMP_REPO_DIR=""
+SOURCE_WORKSPACE_DIR=""
 
 cleanup() {
   if [[ -n "${TMP_REPO_DIR}" && -d "${TMP_REPO_DIR}" ]]; then
@@ -59,11 +60,19 @@ clone_cto_repo() {
   TMP_REPO_DIR="$(mktemp -d)"
   log_info "Cloning CTO repository branch '${resolved_branch}'."
   git clone --depth 1 --branch "${resolved_branch}" "${CTO_REPO_URL}" "${TMP_REPO_DIR}" >/dev/null
-  [[ -d "${TMP_REPO_DIR}/workspace-factory" ]] || die "workspace-factory not found in cloned repo."
+  if [[ -d "${TMP_REPO_DIR}/cto-factory" ]]; then
+    SOURCE_WORKSPACE_DIR="${TMP_REPO_DIR}/cto-factory"
+    return 0
+  fi
+  if [[ -d "${TMP_REPO_DIR}/workspace-factory" ]]; then
+    SOURCE_WORKSPACE_DIR="${TMP_REPO_DIR}/workspace-factory"
+    return 0
+  fi
+  die "Neither cto-factory nor workspace-factory found in cloned repo."
 }
 
 sync_cto_workspace() {
-  local source_workspace="${TMP_REPO_DIR}/workspace-factory"
+  local source_workspace="${SOURCE_WORKSPACE_DIR}"
   local target_workspace="${OPENCLAW_HOME}/workspace-factory"
   ensure_dir "${target_workspace}"
 
@@ -94,12 +103,20 @@ rewrite_hardcoded_paths() {
   log_info "Rewriting hardcoded local paths in copied CTO files."
   python3 - "${target_workspace}" "${OPENCLAW_HOME}" <<'PY'
 import pathlib
+import re
 import sys
 
 root = pathlib.Path(sys.argv[1])
 openclaw_home = sys.argv[2]
-needle = "/Users/uladzislaupraskou/.openclaw"
-extensions = {".md", ".sh", ".txt", ".json", ".yaml", ".yml"}
+explicit_needles = (
+    "/Users/uladzislaupraskou/.openclaw",
+    "/home/ubuntu/.openclaw",
+)
+dynamic_patterns = (
+    re.compile(r"/Users/[^/]+/\.openclaw"),
+    re.compile(r"/home/[^/]+/\.openclaw"),
+)
+extensions = {".md", ".sh", ".py", ".txt", ".json", ".yaml", ".yml", ".toml"}
 updated = 0
 
 for path in root.rglob("*"):
@@ -111,9 +128,14 @@ for path in root.rglob("*"):
         text = path.read_text(encoding="utf-8")
     except Exception:
         continue
-    if needle not in text:
+    replaced = text
+    for needle in explicit_needles:
+        replaced = replaced.replace(needle, openclaw_home)
+    for pattern in dynamic_patterns:
+        replaced = pattern.sub(openclaw_home, replaced)
+    if replaced == text:
         continue
-    path.write_text(text.replace(needle, openclaw_home), encoding="utf-8")
+    path.write_text(replaced, encoding="utf-8")
     updated += 1
 
 print(updated)
