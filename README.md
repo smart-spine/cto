@@ -73,7 +73,7 @@ Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-ag
 Run on the server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/smart-spine/cto/main/scripts/00_bootstrap_dependencies.sh | bash
+curl -fsSL https://raw.githubusercontent.com/no-name-labs/cto/main/scripts/00_bootstrap_dependencies.sh | bash
 ```
 
 Script `00` will:

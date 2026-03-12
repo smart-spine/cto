@@ -16,7 +16,7 @@ Do not open a public issue for sensitive vulnerabilities.
 Use one of these private channels:
 
 1. GitHub Security Advisory:
-   `https://github.com/smart-spine/cto/security/advisories/new`
+   `https://github.com/no-name-labs/cto/security/advisories/new`
 2. If advisory UI is unavailable, contact maintainers privately and include:
    - impact summary
    - reproduction steps

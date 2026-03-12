@@ -235,7 +235,7 @@ enter_repo_shell_if_interactive() {
 }
 
 main() {
-  local repo_url="${CTO_REPO_URL:-https://github.com/smart-spine/cto.git}"
+  local repo_url="${CTO_REPO_URL:-https://github.com/no-name-labs/cto.git}"
   local requested_branch="${CTO_REPO_BRANCH:-main}"
   local default_repo_dir
   default_repo_dir="$(resolve_default_repo_dir)"

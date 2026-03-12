@@ -18,7 +18,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
-CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/smart-spine/cto.git}"
+CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/no-name-labs/cto.git}"
 CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
 BIND_DIRECT_USER_ID="${BIND_DIRECT_USER_ID:-}"
