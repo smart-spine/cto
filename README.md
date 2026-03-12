@@ -10,6 +10,21 @@ What CTO bot is for:
 
 This deployment package is tuned for **OpenAI API** (not OpenRouter).
 
+## Open Source Governance
+
+Before contributing, read:
+
+- [LICENSE](LICENSE) (Apache-2.0)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [TRADEMARKS.md](TRADEMARKS.md)
+
+Contribution model:
+
+- DCO-based sign-off is required (`git commit -s`).
+- Pull requests are the only merge path to protected branches.
+
 ## Prerequisites
 
 You need:

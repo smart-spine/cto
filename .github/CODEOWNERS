@@ -1,0 +1,10 @@
+# Default owners for all repository changes.
+* @l3eaver146 @medvedikur
+
+# Sensitive ownership and policy files.
+/.github/ @l3eaver146 @medvedikur
+/scripts/ @l3eaver146 @medvedikur
+/cto-factory/ @l3eaver146 @medvedikur
+/LICENSE @l3eaver146 @medvedikur
+/SECURITY.md @l3eaver146 @medvedikur
+/TRADEMARKS.md @l3eaver146 @medvedikur
