@@ -298,9 +298,7 @@ preferred_primary = uniq(preferred_primary)
 preferred_fallbacks = uniq(preferred_fallbacks)
 preferred_heartbeat = uniq(preferred_heartbeat)
 
-selected_primary = pick_first(preferred_primary, allowed_set)
-if not selected_primary and allowed_models:
-    selected_primary = allowed_models[0]
+selected_primary = pick_first(preferred_primary, set())
 if not selected_primary:
     selected_primary = cto_model or ("anthropic/claude-opus-4-5" if provider_mode == "anthropic" else "openai/gpt-5.3-codex")
 
@@ -308,21 +306,21 @@ selected_fallbacks = []
 for m in preferred_fallbacks:
     if m == selected_primary:
         continue
-    if allowed_set and m not in allowed_set:
-        continue
     selected_fallbacks.append(m)
 selected_fallbacks = uniq(selected_fallbacks)[:3]
 
-if not selected_fallbacks and allowed_models:
+if len(selected_fallbacks) < 3 and allowed_models:
     for m in allowed_models:
         if m == selected_primary:
+            continue
+        if m in selected_fallbacks:
             continue
         selected_fallbacks.append(m)
         if len(selected_fallbacks) >= 3:
             break
     selected_fallbacks = uniq(selected_fallbacks)
 
-heartbeat_model = pick_first(preferred_heartbeat, allowed_set)
+heartbeat_model = pick_first(preferred_heartbeat, set())
 if not heartbeat_model:
     heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
 
