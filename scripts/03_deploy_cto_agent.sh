@@ -19,7 +19,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
 CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/no-name-labs/cto.git}"
-CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-main}"
+CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
 BIND_MODE="${BIND_MODE:-}"
 BIND_TELEGRAM_LINK="${BIND_TELEGRAM_LINK:-}"
@@ -34,6 +34,22 @@ MODEL_ALLOWLIST_STRICT="${MODEL_ALLOWLIST_STRICT:-true}"
 
 TMP_REPO_DIR=""
 SOURCE_FACTORY_DIR=""
+
+detect_local_repo_branch() {
+  local candidate=""
+  if git -C "${SCRIPT_DIR}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    candidate="$(git -C "${SCRIPT_DIR}/.." rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    candidate="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  fi
+
+  if [[ -n "${candidate}" && "${candidate}" != "HEAD" ]]; then
+    printf "%s" "${candidate}"
+    return 0
+  fi
+
+  printf "main"
+}
 
 load_binding_defaults_from_env() {
   local env_file="${OPENCLAW_HOME}/.env"
@@ -671,6 +687,10 @@ main() {
   require_any_code_agent_cli
 
   [[ -f "${OPENCLAW_CONFIG_PATH}" ]] || die "Missing ${OPENCLAW_CONFIG_PATH}. Run Script 1 first."
+  if [[ -z "${CTO_REPO_BRANCH}" ]]; then
+    CTO_REPO_BRANCH="$(detect_local_repo_branch)"
+    log_info "CTO_REPO_BRANCH not set; defaulting to local branch '${CTO_REPO_BRANCH}'."
+  fi
   load_binding_defaults_from_env
   resolve_model_provider_allowlist
 
