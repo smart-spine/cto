@@ -18,7 +18,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
-CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/smart-spine/cto-agent.git}"
+CTO_REPO_URL="${CTO_REPO_URL:-https://github.com/no-name-labs/cto.git}"
 CTO_REPO_BRANCH="${CTO_REPO_BRANCH:-main}"
 CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
 BIND_MODE="${BIND_MODE:-}"
@@ -27,11 +27,13 @@ BIND_GROUP_ID="${BIND_GROUP_ID:-}"
 BIND_TOPIC_ID="${BIND_TOPIC_ID:-}"
 BIND_DIRECT_USER_ID="${BIND_DIRECT_USER_ID:-}"
 TELEGRAM_ALLOWED_USER_ID="${TELEGRAM_ALLOWED_USER_ID:-}"
+LAST_PAIRED_TELEGRAM_USER_ID="${LAST_PAIRED_TELEGRAM_USER_ID:-}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 MODEL_PROVIDERS_ALLOWLIST="${MODEL_PROVIDERS_ALLOWLIST:-}"
 MODEL_ALLOWLIST_STRICT="${MODEL_ALLOWLIST_STRICT:-true}"
 
 TMP_REPO_DIR=""
+SOURCE_FACTORY_DIR=""
 
 load_binding_defaults_from_env() {
   local env_file="${OPENCLAW_HOME}/.env"
@@ -42,6 +44,7 @@ load_binding_defaults_from_env() {
   local cur_bind_topic="${BIND_TOPIC_ID}"
   local cur_bind_direct="${BIND_DIRECT_USER_ID}"
   local cur_allowed_uid="${TELEGRAM_ALLOWED_USER_ID}"
+  local cur_last_paired_uid="${LAST_PAIRED_TELEGRAM_USER_ID}"
   # shellcheck disable=SC1090
   source "${env_file}"
   [[ -n "${cur_bind_mode}" ]] && BIND_MODE="${cur_bind_mode}"
@@ -50,6 +53,8 @@ load_binding_defaults_from_env() {
   [[ -n "${cur_bind_topic}" ]] && BIND_TOPIC_ID="${cur_bind_topic}"
   [[ -n "${cur_bind_direct}" ]] && BIND_DIRECT_USER_ID="${cur_bind_direct}"
   [[ -n "${cur_allowed_uid}" ]] && TELEGRAM_ALLOWED_USER_ID="${cur_allowed_uid}"
+  [[ -n "${cur_last_paired_uid}" ]] && LAST_PAIRED_TELEGRAM_USER_ID="${cur_last_paired_uid}"
+  return 0
 }
 
 resolve_model_provider_allowlist() {
@@ -115,11 +120,18 @@ clone_cto_repo() {
   TMP_REPO_DIR="$(mktemp -d)"
   log_info "Cloning CTO repository branch '${resolved_branch}'."
   git clone --depth 1 --branch "${resolved_branch}" "${CTO_REPO_URL}" "${TMP_REPO_DIR}" >/dev/null
-  [[ -d "${TMP_REPO_DIR}/workspace-factory" ]] || die "workspace-factory not found in cloned repo."
+  if [[ -d "${TMP_REPO_DIR}/cto-factory" ]]; then
+    SOURCE_FACTORY_DIR="${TMP_REPO_DIR}/cto-factory"
+  elif [[ -d "${TMP_REPO_DIR}/workspace-factory" ]]; then
+    SOURCE_FACTORY_DIR="${TMP_REPO_DIR}/workspace-factory"
+  else
+    die "Neither cto-factory nor workspace-factory found in cloned repo."
+  fi
+  log_info "Using source factory directory: ${SOURCE_FACTORY_DIR}"
 }
 
 sync_cto_workspace() {
-  local source_workspace="${TMP_REPO_DIR}/workspace-factory"
+  local source_workspace="${SOURCE_FACTORY_DIR}"
   local target_workspace="${OPENCLAW_HOME}/workspace-factory"
   ensure_dir "${target_workspace}"
 
@@ -548,7 +560,27 @@ run_health_checks() {
   fi
 
   local cto_marker=""
-  cto_marker="$(printf "%s" "${cto_output}" | grep -Eo 'codex remembered|claudecode remembered' | tail -n1 || true)"
+  cto_marker="$(python3 - "${cto_output}" <<'PY'
+import re
+import sys
+
+text = (sys.argv[1] if len(sys.argv) > 1 else "").lower()
+patterns = [
+    r"\bcodex\b[^a-z0-9]{0,8}\bremembered\b",
+    r"\bclaudecode\b[^a-z0-9]{0,8}\bremembered\b",
+]
+for pat in patterns:
+    m = re.search(pat, text, re.I)
+    if m:
+        raw = m.group(0)
+        if "claudecode" in raw:
+            print("claudecode remembered")
+        else:
+            print("codex remembered")
+        raise SystemExit(0)
+print("")
+PY
+)"
   if [[ -z "${cto_marker}" ]]; then
     printf "%s\n" "${cto_output}" >&2
     die "CTO local healthcheck did not return remembered marker phrase."
@@ -607,6 +639,9 @@ collect_binding_inputs() {
     [[ -n "${BIND_GROUP_ID}" ]] || die "Group ID is required for topic binding."
     [[ -n "${BIND_TOPIC_ID}" ]] || die "Topic ID is required for topic binding."
 
+    if [[ -z "${TELEGRAM_ALLOWED_USER_ID}" && -n "${LAST_PAIRED_TELEGRAM_USER_ID}" ]]; then
+      TELEGRAM_ALLOWED_USER_ID="${LAST_PAIRED_TELEGRAM_USER_ID}"
+    fi
     if [[ -z "${TELEGRAM_ALLOWED_USER_ID}" && "${NON_INTERACTIVE}" != "true" ]]; then
       read -r -p "Telegram user ID to allow (optional; blank = auto from existing allowlist): " TELEGRAM_ALLOWED_USER_ID
     fi
@@ -615,6 +650,9 @@ collect_binding_inputs() {
 
   if [[ -z "${BIND_DIRECT_USER_ID}" && -n "${TELEGRAM_ALLOWED_USER_ID}" ]]; then
     BIND_DIRECT_USER_ID="${TELEGRAM_ALLOWED_USER_ID}"
+  fi
+  if [[ -z "${BIND_DIRECT_USER_ID}" && -n "${LAST_PAIRED_TELEGRAM_USER_ID}" ]]; then
+    BIND_DIRECT_USER_ID="${LAST_PAIRED_TELEGRAM_USER_ID}"
   fi
   if [[ -z "${BIND_DIRECT_USER_ID}" && "${NON_INTERACTIVE}" != "true" ]]; then
     read -r -p "Telegram user ID for direct-chat binding (optional; blank = auto from existing allowlist): " BIND_DIRECT_USER_ID

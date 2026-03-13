@@ -32,7 +32,6 @@ RUNTIME_DEFAULT_MODEL=""
 RUNTIME_TARGET_MODEL=""
 RUNTIME_DEFER_MODEL_PRIMARY="false"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
-GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-prompt}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 SKIP_CODEX_LOGIN="${SKIP_CODEX_LOGIN:-false}"
@@ -696,50 +695,9 @@ resolve_gateway_token() {
     return 0
   fi
 
-  if [[ "${NON_INTERACTIVE}" == "true" ]]; then
-    case "${GATEWAY_TOKEN_MODE}" in
-      auto|prompt|"")
-        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-        GATEWAY_TOKEN_GENERATED="true"
-        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically (non-interactive mode)."
-        ;;
-      manual)
-        die "GATEWAY_TOKEN_MODE=manual requires OPENCLAW_GATEWAY_TOKEN to be set."
-        ;;
-      *)
-        die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
-        ;;
-    esac
-    return 0
-  fi
-
-  case "${GATEWAY_TOKEN_MODE}" in
-    auto)
-      OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-      GATEWAY_TOKEN_GENERATED="true"
-      log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
-      ;;
-    manual)
-      prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      ;;
-    prompt|"")
-      echo "Choose OPENCLAW_GATEWAY_TOKEN setup:"
-      echo "  1) Auto-generate now (recommended)"
-      echo "  2) Enter manually"
-      local choice=""
-      read -r -p "Choice [1/2] (default 1): " choice
-      if [[ "${choice}" == "2" ]]; then
-        prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
-      else
-        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-        GATEWAY_TOKEN_GENERATED="true"
-        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
-      fi
-      ;;
-    *)
-      die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
-      ;;
-  esac
+  OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+  GATEWAY_TOKEN_GENERATED="true"
+  log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
 }
 
 print_gateway_token_notice() {
@@ -933,6 +891,46 @@ run_claude_setup_token_and_capture() {
   return 0
 }
 
+resolve_runtime_setup_token() {
+  OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
+  if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
+    return 0
+  fi
+
+  CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${CLAUDE_CODE_OAUTH_TOKEN}")"
+  if is_valid_claude_oauth_token "${CLAUDE_CODE_OAUTH_TOKEN}"; then
+    OPENCLAW_RUNTIME_SETUP_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}"
+    log_info "Reusing CLAUDE_CODE_OAUTH_TOKEN for OpenClaw runtime setup-token."
+    return 0
+  fi
+
+  user_step "Step 1: claude setup-token"
+  user_step "If OpenClaw asks for token input, paste the token printed by claude setup-token."
+  if ! run_claude_setup_token_and_capture; then
+    die "claude setup-token failed."
+  fi
+  OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
+  if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
+    return 0
+  fi
+
+  local token_attempt=0
+  while (( token_attempt < 3 )); do
+    token_attempt=$((token_attempt + 1))
+    user_step "Paste setup-token value (starts with sk-ant-oat...)."
+    user_step "If you see this prompt, the token was already printed above by claude setup-token."
+    prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
+    OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
+    if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
+      return 0
+    fi
+    log_warn "Invalid setup-token format. Retry ${token_attempt}/3."
+    OPENCLAW_RUNTIME_SETUP_TOKEN=""
+  done
+
+  die "Could not capture a valid Anthropic setup-token after 3 attempts."
+}
+
 apply_runtime_setup_token_via_openclaw() {
   local token="$1"
   local out=""
@@ -1113,8 +1111,6 @@ collect_runtime_and_agent_secrets() {
       ;;
   esac
 
-  user_step "You can control gateway token mode via GATEWAY_TOKEN_MODE=prompt|auto|manual."
-
   resolve_gateway_token
 }
 
@@ -1140,28 +1136,15 @@ authenticate_runtime_provider() {
     anthropic:oauth)
       user_section "OpenClaw runtime setup-token"
       user_step "Running official Anthropic setup-token flow."
-      user_step "Step 1: claude setup-token"
-      user_step "If OpenClaw asks for token input, paste the token printed by claude setup-token."
       ensure_claude_cli_for_runtime_oauth
-      if ! run_claude_setup_token_and_capture; then
-        die "claude setup-token failed."
-      fi
+      resolve_runtime_setup_token
 
       local token_attempt=0
       local apply_out=""
-      OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
       while (( token_attempt < 3 )); do
         token_attempt=$((token_attempt + 1))
-
-        if ! is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
-          user_step "Paste setup-token value (starts with sk-ant-oat...)."
-          prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
-          OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
-        fi
-        is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || {
-          log_warn "Invalid setup-token format. Retry ${token_attempt}/3."
-          continue
-        }
+        OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
+        is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || die "Invalid runtime setup-token value."
 
         user_step "Step 2: applying token to OpenClaw auth profile (${RUNTIME_PROFILE_ID})."
         apply_out="$(apply_runtime_setup_token_via_openclaw "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || true)"
@@ -1170,6 +1153,10 @@ authenticate_runtime_provider() {
           printf "%s\n" "${apply_out}" >&2
         fi
 
+        # Compatibility fallback: runtime lanes currently expect ANTHROPIC_API_KEY.
+        ANTHROPIC_API_KEY="${OPENCLAW_RUNTIME_SETUP_TOKEN}"
+        upsert_env_var "${OPENCLAW_HOME}/.env" "ANTHROPIC_API_KEY" "${ANTHROPIC_API_KEY}"
+
         apply_runtime_target_model_primary
         if run_runtime_auth_probe; then
           log_info "Anthropic runtime setup-token auth probe passed."
@@ -1177,11 +1164,12 @@ authenticate_runtime_provider() {
         fi
 
         log_warn "Anthropic runtime auth probe failed (attempt ${token_attempt}/3)."
-        user_step "OpenClaw could not verify auth. Re-run setup-token and retry."
-        if ! run_claude_setup_token_and_capture; then
-          log_warn "claude setup-token retry did not complete."
+        if (( token_attempt < 3 )); then
+          user_step "OpenClaw could not verify auth with current token."
+          user_step "Paste another setup-token (you can reuse one printed above)."
+          OPENCLAW_RUNTIME_SETUP_TOKEN=""
+          prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
         fi
-        OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
       done
 
       die "OpenClaw runtime Anthropic setup-token authentication failed after 3 attempts."

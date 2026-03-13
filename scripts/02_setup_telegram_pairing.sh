@@ -28,6 +28,7 @@ BIND_TELEGRAM_LINK="${BIND_TELEGRAM_LINK:-}"
 BIND_GROUP_ID="${BIND_GROUP_ID:-}"
 BIND_TOPIC_ID="${BIND_TOPIC_ID:-}"
 BIND_DIRECT_USER_ID="${BIND_DIRECT_USER_ID:-}"
+LAST_PAIRED_TELEGRAM_USER_ID="${LAST_PAIRED_TELEGRAM_USER_ID:-}"
 
 has_inline_menu() {
   [[ -t 0 ]] && [[ -t 1 ]] && command -v tput >/dev/null 2>&1
@@ -435,6 +436,9 @@ collect_binding_preferences() {
     [[ -n "${BIND_GROUP_ID}" ]] || die "Group ID is required for topic binding."
     [[ -n "${BIND_TOPIC_ID}" ]] || die "Topic ID is required for topic binding."
   else
+    if [[ -z "${BIND_DIRECT_USER_ID}" && -n "${TELEGRAM_ALLOWED_USER_ID}" ]]; then
+      BIND_DIRECT_USER_ID="${TELEGRAM_ALLOWED_USER_ID}"
+    fi
     if [[ -z "${BIND_DIRECT_USER_ID}" ]]; then
       BIND_DIRECT_USER_ID="${PAIRING_TELEGRAM_USER_ID}"
     fi
@@ -451,6 +455,12 @@ collect_binding_preferences() {
 
 persist_binding_preferences_to_env() {
   upsert_env_var "${OPENCLAW_HOME}/.env" "BIND_MODE" "${BIND_MODE}"
+  if [[ -n "${LAST_PAIRED_TELEGRAM_USER_ID}" ]]; then
+    upsert_env_var "${OPENCLAW_HOME}/.env" "LAST_PAIRED_TELEGRAM_USER_ID" "${LAST_PAIRED_TELEGRAM_USER_ID}"
+  fi
+  if [[ -n "${TELEGRAM_ALLOWED_USER_ID}" ]]; then
+    upsert_env_var "${OPENCLAW_HOME}/.env" "TELEGRAM_ALLOWED_USER_ID" "${TELEGRAM_ALLOWED_USER_ID}"
+  fi
   if [[ "${BIND_MODE}" == "topic" ]]; then
     upsert_env_var "${OPENCLAW_HOME}/.env" "BIND_GROUP_ID" "${BIND_GROUP_ID}"
     upsert_env_var "${OPENCLAW_HOME}/.env" "BIND_TOPIC_ID" "${BIND_TOPIC_ID}"
@@ -533,6 +543,11 @@ main() {
   with_openclaw_env openclaw pairing approve telegram "${pairing_code}" --notify >/dev/null
   allow_group_user "${paired_user_id}"
   if [[ -n "${paired_user_id}" ]]; then
+    LAST_PAIRED_TELEGRAM_USER_ID="${paired_user_id}"
+    TELEGRAM_ALLOWED_USER_ID="${paired_user_id}"
+    if [[ -z "${BIND_DIRECT_USER_ID}" ]]; then
+      BIND_DIRECT_USER_ID="${paired_user_id}"
+    fi
     PAIRING_TELEGRAM_USER_ID="${paired_user_id}"
   fi
 
