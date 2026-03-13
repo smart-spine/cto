@@ -22,7 +22,7 @@ CTO_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CTO_SEED_DIR="${CTO_SEED_DIR:-${CTO_REPO_ROOT}/cto-factory}"
 DEPLOY_MANIFEST="${DEPLOY_MANIFEST:-${CTO_SEED_DIR}/DEPLOY_MANIFEST.txt}"
 CTO_REPO_REF="${CTO_REPO_REF:-main}"
-CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
+CTO_MODEL="${CTO_MODEL:-}"
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-3600}"
 UPDATE_REPO="${UPDATE_REPO:-true}"
 FORCE_MODEL_UPDATE="${FORCE_MODEL_UPDATE:-false}"
@@ -214,12 +214,129 @@ if isinstance(agents, list):
 defaults = agents.setdefault("defaults", {})
 defaults["timeoutSeconds"] = agent_timeout_seconds
 
+
+def uniq(seq):
+    seen = set()
+    out = []
+    for item in seq:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def pick_first(candidates, allowed):
+    for m in candidates:
+        if not m:
+            continue
+        if not allowed or m in allowed:
+            return m
+    return ""
+
+
+auth = data.get("auth") or {}
+auth_order = auth.get("order") or {}
+provider_mode = "openai"
+if isinstance(auth_order, dict):
+    keys = [k for k in auth_order.keys() if isinstance(k, str)]
+    if keys == ["anthropic"]:
+        provider_mode = "anthropic"
+
+defaults_models = defaults.get("models") or {}
+allowed_models = [m for m in defaults_models.keys() if isinstance(m, str)] if isinstance(defaults_models, dict) else []
+allowed_set = set(allowed_models)
+
+if provider_mode == "anthropic":
+    preferred_primary = [
+        cto_model,
+        "anthropic/claude-opus-4-6",
+        "anthropic/claude-opus-4-5",
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4-5",
+    ]
+    preferred_fallbacks = [
+        "anthropic/claude-opus-4-5",
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-3-7-sonnet-latest",
+        "anthropic/claude-3-5-sonnet-20241022",
+    ]
+    preferred_heartbeat = [
+        "anthropic/claude-3-5-haiku-latest",
+        "anthropic/claude-3-5-haiku-20241022",
+        "anthropic/claude-3-haiku-20240307",
+        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-haiku-4-5-20251001",
+    ]
+else:
+    preferred_primary = [
+        cto_model,
+        "openai/gpt-5.3-codex",
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+    ]
+    preferred_fallbacks = [
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+        "openai/gpt-4.1",
+    ]
+    preferred_heartbeat = [
+        "openai/gpt-5-nano",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.2",
+    ]
+
+preferred_primary = uniq(preferred_primary)
+preferred_fallbacks = uniq(preferred_fallbacks)
+preferred_heartbeat = uniq(preferred_heartbeat)
+
+selected_primary = pick_first(preferred_primary, allowed_set)
+if not selected_primary and allowed_models:
+    selected_primary = allowed_models[0]
+if not selected_primary:
+    selected_primary = cto_model or ("anthropic/claude-opus-4-5" if provider_mode == "anthropic" else "openai/gpt-5.3-codex")
+
+selected_fallbacks = []
+for m in preferred_fallbacks:
+    if m == selected_primary:
+        continue
+    if allowed_set and m not in allowed_set:
+        continue
+    selected_fallbacks.append(m)
+selected_fallbacks = uniq(selected_fallbacks)[:3]
+
+if not selected_fallbacks and allowed_models:
+    for m in allowed_models:
+        if m == selected_primary:
+            continue
+        selected_fallbacks.append(m)
+        if len(selected_fallbacks) >= 3:
+            break
+    selected_fallbacks = uniq(selected_fallbacks)
+
+heartbeat_model = pick_first(preferred_heartbeat, allowed_set)
+if not heartbeat_model:
+    heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
+
+model_payload = {"primary": selected_primary}
+if selected_fallbacks:
+    model_payload["fallbacks"] = selected_fallbacks
+
 agent_list = agents.setdefault("list", [])
 cto_heartbeat = {
-    "every": "5m",
+    "every": "1h",
     "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
     "target": "none",
     "ackMaxChars": 300,
+    "model": {"primary": heartbeat_model},
 }
 existing = None
 for item in agent_list:
@@ -234,7 +351,7 @@ if existing is None:
         "name": "CTO Factory",
         "workspace": str(openclaw_home / "workspace-factory"),
         "agentDir": str(openclaw_home / "agents/cto-factory/agent"),
-        "model": {"primary": cto_model},
+        "model": model_payload,
         "heartbeat": cto_heartbeat,
         "identity": {
             "name": "CTO Factory Agent",
@@ -249,14 +366,23 @@ else:
     existing["workspace"] = str(openclaw_home / "workspace-factory")
     existing["agentDir"] = str(openclaw_home / "agents/cto-factory/agent")
     existing["heartbeat"] = cto_heartbeat
-    if force_model_update:
-        existing["model"] = {"primary": cto_model}
+    model = existing.get("model")
+    if not isinstance(model, dict):
+        model = {}
+
+    current_primary = str(model.get("primary") or "").strip()
+    provider_mismatch = (
+        (provider_mode == "anthropic" and not current_primary.startswith("anthropic/"))
+        or (provider_mode == "openai" and current_primary.startswith("anthropic/"))
+    )
+
+    if force_model_update or provider_mismatch:
+        existing["model"] = model_payload
     else:
-        model = existing.setdefault("model", {})
-        if not isinstance(model, dict):
-            existing["model"] = {"primary": cto_model}
-        else:
-            model.setdefault("primary", cto_model)
+        model.setdefault("primary", selected_primary)
+        if selected_fallbacks and "fallbacks" not in model:
+            model["fallbacks"] = selected_fallbacks
+        existing["model"] = model
 
 tools = data.setdefault("tools", {})
 sessions = tools.setdefault("sessions", {})
