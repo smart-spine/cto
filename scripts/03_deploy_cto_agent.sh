@@ -491,7 +491,7 @@ cto_payload = {
         "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
         "target": "none",
         "ackMaxChars": 300,
-        "model": {"primary": heartbeat_model},
+        "model": heartbeat_model,
     },
     "identity": {
         "name": "CTO Factory Agent",
