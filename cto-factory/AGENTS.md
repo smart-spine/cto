@@ -33,32 +33,27 @@ This is a state machine, NOT a rigid linear script.
 - ALL generated agent workspaces MUST be rooted at `${OPENCLAW_ROOT}/workspace-<agent_name>`.
 - Generated workspaces MUST NOT be created under `${CTO_WORKSPACE}`.
 
-## STRICT CODEX DELEGATION PROTOCOL
-All generic delegation rules are centralized here. Other profile/skill files MUST reference this block and MUST NOT redefine the generic policy.
+## STRICT CODE AGENT DELEGATION PROTOCOL
+All delegation rules and per-agent command contracts are centralized in:
+- `CODE_AGENT_PROTOCOLS.md`
 
-- The FIRST **CODE/CONFIG** mutating action MUST be successful Codex delegation + verification, unless it matches a documented fast-path exception below.
-- Operational state changes are EXEMPT from the first-delegation rule:
-  - git backup branch creation,
-  - git status/diff/checkpoint operations,
-  - non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
-- You MUST use the codex delegation tool for all file creations and edits. NO DIRECT EDITS ALLOWED.
-- You MUST delegate ALL complex application logic and runtime behavior changes in `.js`, `.ts`, and `.py` to Codex.
-- If a file type or change is ambiguous, treat it as Codex-required.
-- You MUST use guarded delegation path (no naked raw fallback in normal flow):
-  - `python3 .../scripts/codex_guarded_exec.py ...`
-- Every Codex run MUST include: `Write Unit Tests & Verify`.
-- For non-trivial tasks, you MUST run TWO Codex phases:
-  - `PLAN PHASE`: Codex returns an explicit execution plan and requirement coverage map.
-  - `IMPLEMENT PHASE`: Codex implements according to the approved plan and returns completion evidence.
-- Codex responses for both phases MUST include machine-checkable JSON blocks:
-  - `CODEX_PLAN_JSON_BEGIN` ... `CODEX_PLAN_JSON_END`
-  - `CODEX_EXEC_REPORT_JSON_BEGIN` ... `CODEX_EXEC_REPORT_JSON_END`
-- You MUST validate those blocks via gate script before proceeding:
-  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py ...`
-- If plan/report gate fails, you MUST NOT continue. Return to Codex with concrete gap list and rerun.
-- After each Codex run, you MUST run tests immediately.
-- If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
-- If Codex transport fails, you MUST retry with bounded backoff and report attempts.
+Mandatory usage:
+- On startup (first runnable turn after deploy/restart), you MUST initialize code-agent memory once:
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"`
+- Before any CODE/CONFIG mutation, you MUST run code-agent memory detect/remember:
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"`
+- You MUST read remembered code agent from:
+  - `${OPENCLAW_ROOT}/workspace-factory/.cto-brain/runtime/code_agent_memory.json`
+- You MUST use the remembered local code agent (`codex` OR `claude`) for mutations.
+- You MUST announce remembered agent phrase in-session on first mutation step:
+  - `codex remembered` OR `claudecode remembered`.
+- If no supported code agent is available, you MUST stop with:
+  - `BLOCKED: CODE_AGENT_UNAVAILABLE`.
+
+Operational state changes are EXEMPT from first-delegation rule:
+- git backup branch creation,
+- git status/diff/checkpoint operations,
+- non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
 
 ## SKILL ROUTING CONTRACT
 - `SKILL_ROUTING` is mandatory for every non-trivial task.
@@ -96,7 +91,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
   - `${OPENCLAW_ROOT}/openclaw.json`
 - NEVER assume config lives under `workspace-factory/`.
 - If validation fails due to SIMPLE JSON syntax (for example missing comma/bracket), fix directly and revalidate.
-- If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to Codex.
+- If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to remembered code agent.
 - NEVER return `READY_FOR_APPLY` with failing config validation.
 
 ## FUNCTIONAL SMOKE RULES (PRE-APPLY)
@@ -131,7 +126,7 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 ## COMMUNICATION CONTRACT
 - Use `PLAN -> ACT -> OBSERVE -> REACT`.
 - **CROSS-CHANNEL REPORTING**: If you receive a message, event, or trigger from ANY source outside of the user's direct Telegram session (e.g., from another agent, an API, a webchat, or a system event), you MUST explicitly report this receipt back to the user in their active Telegram session before acting on it. Never process external signals silently.
-- ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
+- ALWAYS send a pre-message before long-running actions (code-agent runs, full test suites, large migrations).
 - **CRITICAL**: The pre-message and the tool call to start the action MUST be generated in the EXACT SAME TURN. Do not reply with text saying you are starting and then stop without calling the execution tool, as this will stall the agent.
 - You MUST NEVER go silent while a task is still running. Silence longer than 90 seconds is a protocol violation.
 - For any command likely to exceed 90 seconds, you MUST dispatch through async supervisor flow (`cto_async_task.py`) with heartbeat callbacks enabled.

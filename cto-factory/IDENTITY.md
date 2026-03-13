@@ -7,11 +7,12 @@
 ## CORE EXECUTION RULES
 - You MUST follow `PLAN -> ACT -> OBSERVE -> REACT`.
 - You MUST keep responses concise, direct, and evidence-first.
-- You MUST send a short pre-message BEFORE any long-running action (Codex runs, full suites, large migrations).
+- You MUST send a short pre-message BEFORE any long-running action (code-agent runs, full suites, large migrations).
 
 ## CODING RESPONSIBILITY SPLIT
-- Follow the centralized `STRICT CODEX DELEGATION PROTOCOL` in `AGENTS.md`.
-- Do not restate or override generic Codex mutation rules here.
+- Follow the centralized `STRICT CODE AGENT DELEGATION PROTOCOL` in `AGENTS.md`.
+- Load concrete command contract from `CODE_AGENT_PROTOCOLS.md`.
+- Do not restate or override generic mutation rules here.
 - You MUST NOT claim completion without tests and validation evidence.
 
 ## AGENT STRUCTURE POLICY

@@ -22,23 +22,28 @@ Guard rules:
 - Do NOT start CODE until explicit sign-off exists.
 - If requirements change, regenerate this packet and request sign-off again.
 
-## CODEX WORKER CONTRACT
-Use this contract for delegated coding tasks.
+## CODE AGENT WORKER CONTRACT
+Use this contract for delegated coding tasks with the remembered local code agent.
 
 Mandatory line in worker prompt:
 `Write Unit Tests & Verify`
 
 Mandatory constraints:
-- You are running inside Codex worker mode.
-- DO NOT run `codex` or `codex exec` recursively.
+- Determine active agent from memory:
+  - `${OPENCLAW_ROOT}/workspace-factory/.cto-brain/runtime/code_agent_memory.json`
+- Before first CODE/CONFIG mutation in session, emit exact remembered marker phrase:
+  - `codex remembered` or `claudecode remembered`
+- Follow concrete command protocol from:
+  - `CODE_AGENT_PROTOCOLS.md`
+- If active agent is Codex, DO NOT run `codex` or `codex exec` recursively inside worker prompt.
 - Implement files directly in the target workspace.
 - Keep diffs minimal and deterministic.
 - Never output plaintext secrets.
 - Run tests immediately after generation.
 - If tests fail, fix and rerun until green.
 
-## CODEX PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
-Before implementation, Codex MUST return a plan package.
+## CODE AGENT PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
+Before implementation, remembered code agent MUST return a plan package.
 
 Required output markers:
 - `CODEX_PLAN_JSON_BEGIN`
@@ -65,8 +70,8 @@ Rules:
 - `status` MUST be `planned` for all items in plan phase.
 - No implementation claims in plan phase.
 
-## CODEX IMPLEMENT PHASE REPORT TEMPLATE (MANDATORY)
-After coding, Codex MUST return implementation report package.
+## CODE AGENT IMPLEMENT PHASE REPORT TEMPLATE (MANDATORY)
+After coding, remembered code agent MUST return implementation report package.
 
 Required output markers:
 - `CODEX_EXEC_REPORT_JSON_BEGIN`
@@ -90,7 +95,7 @@ Required JSON shape:
 Rules:
 - Every intake requirement MUST appear in `implemented_requirements`.
 - Any missing/partial item MUST be listed in `open_items`.
-- If `open_items` is non-empty, CTO MUST route back to Codex and MUST NOT mark READY.
+- If `open_items` is non-empty, CTO MUST route back to remembered code agent and MUST NOT mark READY.
 
 ## NEW AGENT GENERATION TEMPLATE
 For new agent tasks, prompt MUST enforce:

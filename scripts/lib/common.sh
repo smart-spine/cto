@@ -219,3 +219,123 @@ wait_for_gateway_health() {
     sleep 1
   done
 }
+
+sync_allowed_models_from_provider_catalog() {
+  local config_path="${OPENCLAW_CONFIG_PATH:-${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json}"
+  local providers_csv="${MODEL_PROVIDERS_ALLOWLIST:-openai,openai-codex}"
+  local strict_mode="${MODEL_ALLOWLIST_STRICT:-true}"
+
+  [[ -f "${config_path}" ]] || die "Cannot sync models: missing config ${config_path}"
+  require_cmd python3
+  require_cmd openclaw
+
+  local sync_out=""
+  if ! sync_out="$(python3 - "${config_path}" "${providers_csv}" "${strict_mode}" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+
+config_path = pathlib.Path(sys.argv[1])
+providers = [p.strip() for p in sys.argv[2].split(",") if p.strip()]
+strict_mode = str(sys.argv[3]).strip().lower() in {"1", "true", "yes", "on"}
+
+if not providers:
+    raise SystemExit("MODEL_PROVIDERS_ALLOWLIST is empty.")
+
+data = json.loads(config_path.read_text(encoding="utf-8"))
+agents = data.setdefault("agents", {})
+if isinstance(agents, list):
+    agents = {"list": agents}
+    data["agents"] = agents
+defaults = agents.setdefault("defaults", {})
+model_cfg = defaults.setdefault("model", {})
+if not isinstance(model_cfg, dict):
+    model_cfg = {}
+    defaults["model"] = model_cfg
+primary = str(model_cfg.get("primary") or "").strip()
+
+existing_models = defaults.get("models")
+if not isinstance(existing_models, dict):
+    existing_models = {}
+
+collected = []
+missing = []
+
+for provider in providers:
+    cmd = ["openclaw", "models", "list", "--all", "--provider", provider, "--plain"]
+    try:
+        output = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        output = ""
+    provider_models = []
+    for raw in output.splitlines():
+        item = raw.strip()
+        if not item:
+            continue
+        if item.startswith(provider + "/"):
+            provider_models.append(item)
+    if provider_models:
+        collected.extend(provider_models)
+    else:
+        missing.append(provider)
+
+seen = set()
+ordered = []
+for model in collected:
+    if model in seen:
+        continue
+    seen.add(model)
+    ordered.append(model)
+
+if primary and primary not in seen:
+    ordered.insert(0, primary)
+    seen.add(primary)
+
+if not ordered:
+    raise SystemExit("No models discovered for configured providers.")
+
+new_models = {}
+for model in ordered:
+    prev = existing_models.get(model, {})
+    if isinstance(prev, dict):
+        new_models[model] = prev
+    else:
+        new_models[model] = {}
+
+if strict_mode:
+    prefixes = tuple(p + "/" for p in providers)
+    new_models = {k: v for k, v in new_models.items() if k.startswith(prefixes)}
+    if primary and primary not in new_models:
+        new_models[primary] = {}
+
+if not new_models:
+    raise SystemExit("Model allowlist is empty after strict filtering.")
+
+defaults["models"] = new_models
+config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+print(json.dumps({
+    "count": len(new_models),
+    "providers": providers,
+    "missingProviders": missing,
+    "strict": strict_mode
+}))
+PY
+)"; then
+    die "Failed to sync allowed models from provider catalog."
+  fi
+
+  local count
+  count="$(printf "%s" "${sync_out}" | jq -r '.count // 0' 2>/dev/null || printf "0")"
+  if [[ -z "${count}" || "${count}" == "0" ]]; then
+    die "Model sync produced an empty allowlist."
+  fi
+  log_info "Synced ${count} allowed models from providers: ${providers_csv}."
+
+  local missing
+  missing="$(printf "%s" "${sync_out}" | jq -r '.missingProviders // [] | join(",")' 2>/dev/null || true)"
+  if [[ -n "${missing}" && "${missing}" != "null" ]]; then
+    log_warn "No models discovered for providers: ${missing}"
+  fi
+}

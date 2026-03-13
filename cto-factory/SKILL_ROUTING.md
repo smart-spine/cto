@@ -47,7 +47,7 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 4. If intake classifies task as `COMPLEX_INTERACTIVE=YES`, UX mode MUST be `buttons` (not `commands only`).
 5. Never skip `factory-config-qa` when `openclaw.json` changes.
 6. Never skip `factory-test-agent` for major behavior changes.
-7. Never skip `factory-codex-plan-audit` for non-trivial Codex tasks.
+7. Never skip `factory-codex-plan-audit` for non-trivial code-agent tasks (`codex` or `claude`).
 8. Never skip `factory-backup` before CODE/CONFIG mutation paths.
 9. Never skip `factory-apply` once a mutation path reaches `READY_FOR_APPLY` / `APPLY`.
 10. If two skills overlap, pick one primary and document why.
