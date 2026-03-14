@@ -955,17 +955,47 @@ run_claude_setup_token_and_capture() {
 
 apply_runtime_setup_token_via_openclaw() {
   local token="$1"
-  local out=""
-  if [[ -n "${token}" ]]; then
-    out="$(printf "%s\n" "${token}" | with_openclaw_env openclaw models auth paste-token --provider anthropic --profile-id "${RUNTIME_PROFILE_ID}" --expires-in 365d 2>&1 || true)"
-  else
-    out="$(with_openclaw_env openclaw models auth paste-token --provider anthropic --profile-id "${RUNTIME_PROFILE_ID}" --expires-in 365d 2>&1 || true)"
-  fi
-  printf "%s\n" "${out}"
-  if printf "%s" "${out}" | grep -qiE "Failed to read config|Error:|authentication_error|Invalid"; then
-    return 1
-  fi
-  return 0
+  local auth_store_path="${OPENCLAW_HOME}/agents/main/agent/auth-profiles.json"
+  python3 - "${auth_store_path}" "${RUNTIME_PROFILE_ID}" "${token}" <<'PY'
+import json
+import pathlib
+import sys
+import time
+
+store_path = pathlib.Path(sys.argv[1])
+profile_id = sys.argv[2].strip()
+token = sys.argv[3].strip()
+
+if not token:
+    raise SystemExit("empty token")
+
+store_path.parent.mkdir(parents=True, exist_ok=True)
+if store_path.exists():
+    try:
+        data = json.loads(store_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+if not isinstance(data, dict):
+    data = {}
+data["version"] = 1
+profiles = data.get("profiles")
+if not isinstance(profiles, dict):
+    profiles = {}
+    data["profiles"] = profiles
+
+profiles[profile_id] = {
+    "type": "token",
+    "provider": "anthropic",
+    "token": token,
+    "expires": int(time.time() * 1000) + 365 * 24 * 60 * 60 * 1000,
+}
+
+store_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+print(f"Auth store updated: {store_path}")
+PY
 }
 
 ensure_claude_cli_for_runtime_oauth() {
@@ -1115,7 +1145,11 @@ collect_runtime_and_agent_secrets() {
     openai:api_key)
       user_step "OpenClaw runtime provider: OpenAI (API key)"
       user_step "Variable: OPENAI_API_KEY"
-      prompt_secret OPENAI_API_KEY "Enter OPENAI_API_KEY"
+      if [[ -n "${OPENAI_API_KEY}" ]]; then
+        user_step "Reusing previously entered OPENAI_API_KEY."
+      else
+        prompt_secret OPENAI_API_KEY "Enter OPENAI_API_KEY"
+      fi
       ;;
     openai:codex)
       user_step "OpenClaw runtime provider: OpenAI Codex OAuth"
@@ -1124,7 +1158,11 @@ collect_runtime_and_agent_secrets() {
     anthropic:api_key)
       user_step "OpenClaw runtime provider: Anthropic (API key)"
       user_step "Variable: ANTHROPIC_API_KEY"
-      prompt_secret ANTHROPIC_API_KEY "Enter ANTHROPIC_API_KEY"
+      if [[ -n "${ANTHROPIC_API_KEY}" ]]; then
+        user_step "Reusing previously entered ANTHROPIC_API_KEY."
+      else
+        prompt_secret ANTHROPIC_API_KEY "Enter ANTHROPIC_API_KEY"
+      fi
       ;;
     anthropic:oauth)
       user_step "OpenClaw runtime provider: Anthropic setup-token mode"
@@ -1135,7 +1173,7 @@ collect_runtime_and_agent_secrets() {
       ;;
   esac
 
-  user_step "You can control gateway token mode via GATEWAY_TOKEN_MODE=prompt|auto|manual."
+  user_step "Gateway token is generated automatically by installer policy."
 
   resolve_gateway_token
 }
