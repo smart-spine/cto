@@ -94,10 +94,10 @@ resolve_model_provider_allowlist() {
       MODEL_PROVIDERS_ALLOWLIST="anthropic"
       ;;
     openai-codex)
-      MODEL_PROVIDERS_ALLOWLIST="openai,openai-codex"
+      MODEL_PROVIDERS_ALLOWLIST="openai-codex"
       ;;
     openai|"")
-      MODEL_PROVIDERS_ALLOWLIST="openai,openai-codex"
+      MODEL_PROVIDERS_ALLOWLIST="openai"
       ;;
     *)
       # Safe fallback: keep the runtime provider only.
@@ -354,7 +354,12 @@ cto_model = sys.argv[3]
 providers_arg = sys.argv[4] if len(sys.argv) > 4 else ""
 
 provider_allowlist = [p.strip() for p in providers_arg.split(",") if p.strip()]
-provider_mode = "anthropic" if provider_allowlist == ["anthropic"] else "openai"
+if provider_allowlist == ["anthropic"]:
+    provider_mode = "anthropic"
+elif provider_allowlist == ["openai-codex"]:
+    provider_mode = "openai-codex"
+else:
+    provider_mode = "openai"
 
 
 def uniq(seq):
@@ -421,6 +426,17 @@ if provider_mode == "anthropic":
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-haiku-4-5-20251001",
     ]
+elif provider_mode == "openai-codex":
+    preferred_primary = [
+        cto_model,
+        "openai-codex/gpt-5.4",
+    ]
+    preferred_fallbacks = [
+        "openai-codex/gpt-5.4",
+    ]
+    preferred_heartbeat = [
+        "openai-codex/gpt-5.4",
+    ]
 else:
     preferred_primary = [
         cto_model,
@@ -448,7 +464,12 @@ preferred_heartbeat = uniq(preferred_heartbeat)
 
 selected_primary = pick_first(preferred_primary, set())
 if not selected_primary:
-    selected_primary = cto_model or ("anthropic/claude-opus-4-5" if provider_mode == "anthropic" else "openai/gpt-5.3-codex")
+    if provider_mode == "anthropic":
+        selected_primary = cto_model or "anthropic/claude-opus-4-5"
+    elif provider_mode == "openai-codex":
+        selected_primary = cto_model or "openai-codex/gpt-5.4"
+    else:
+        selected_primary = cto_model or "openai/gpt-5.3-codex"
 
 selected_fallbacks = []
 for m in preferred_fallbacks:
@@ -680,13 +701,17 @@ run_health_checks() {
   log_info "Remembered code agent: ${remembered_agent} (${remembered_ack})."
 
   local cto_output=""
-  if ! cto_output="$(with_openclaw_env openclaw agent --local --agent cto-factory --message "Healthcheck: read code-agent memory and reply with exactly one marker phrase: codex remembered or claudecode remembered." --json --timeout 300 2>&1)"; then
-    printf "%s\n" "${cto_output}" >&2
-    die "CTO agent local call failed."
-  fi
-
   local cto_marker=""
-  cto_marker="$(python3 - "${cto_output}" <<'PY'
+  local hc_session_base="cto-healthcheck-$(date +%s)-$$"
+  local hc_attempt=0
+  while (( hc_attempt < 2 )); do
+    hc_attempt=$((hc_attempt + 1))
+    if ! cto_output="$(with_openclaw_env openclaw agent --local --agent cto-factory --session-id "${hc_session_base}-${hc_attempt}" --message "Standalone healthcheck in fresh session. Ignore prior tasks. Read code-agent memory and reply with exactly: ${remembered_ack}" --json --timeout 300 2>&1)"; then
+      printf "%s\n" "${cto_output}" >&2
+      continue
+    fi
+
+    cto_marker="$(python3 - "${cto_output}" <<'PY'
 import re
 import sys
 
@@ -707,6 +732,10 @@ for pat in patterns:
 print("")
 PY
 )"
+    if [[ -n "${cto_marker}" ]]; then
+      break
+    fi
+  done
   if [[ -z "${cto_marker}" ]]; then
     printf "%s\n" "${cto_output}" >&2
     die "CTO local healthcheck did not return remembered marker phrase."
