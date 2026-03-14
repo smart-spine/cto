@@ -381,6 +381,12 @@ def pick_first(candidates, allowed):
             return m
     return ""
 
+
+def matches_provider_prefix(model, prefixes):
+    if not model:
+        return False
+    return any(model.startswith(p + "/") for p in prefixes)
+
 data = json.loads(config_path.read_text(encoding="utf-8"))
 
 agents = data.setdefault("agents", {})
@@ -462,6 +468,16 @@ preferred_primary = uniq(preferred_primary)
 preferred_fallbacks = uniq(preferred_fallbacks)
 preferred_heartbeat = uniq(preferred_heartbeat)
 
+if provider_mode == "anthropic":
+    required_prefixes = ["anthropic"]
+elif provider_mode == "openai-codex":
+    required_prefixes = ["openai-codex"]
+else:
+    required_prefixes = ["openai"]
+
+if cto_model and not matches_provider_prefix(cto_model, required_prefixes):
+    cto_model = ""
+
 selected_primary = pick_first(preferred_primary, set())
 if not selected_primary:
     if provider_mode == "anthropic":
@@ -475,6 +491,8 @@ selected_fallbacks = []
 for m in preferred_fallbacks:
     if m == selected_primary:
         continue
+    if not matches_provider_prefix(m, required_prefixes):
+        continue
     selected_fallbacks.append(m)
 selected_fallbacks = uniq(selected_fallbacks)[:3]
 
@@ -484,6 +502,8 @@ if len(selected_fallbacks) < 3 and allowed_models:
             continue
         if m in selected_fallbacks:
             continue
+        if not matches_provider_prefix(m, required_prefixes):
+            continue
         selected_fallbacks.append(m)
         if len(selected_fallbacks) >= 3:
             break
@@ -491,6 +511,8 @@ if len(selected_fallbacks) < 3 and allowed_models:
 
 heartbeat_model = pick_first(preferred_heartbeat, set())
 if not heartbeat_model:
+    heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
+if not matches_provider_prefix(heartbeat_model, required_prefixes):
     heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
 
 agent_list = agents.setdefault("list", [])
