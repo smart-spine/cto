@@ -161,22 +161,64 @@ with_openclaw_env() {
 
 stop_gateway_background() {
   local openclaw_home="${OPENCLAW_HOME:-$HOME/.openclaw}"
+  local openclaw_port="${OPENCLAW_PORT:-18789}"
   local pid_file="${openclaw_home}/.gateway.pid"
-  if with_openclaw_env openclaw health --json >/dev/null 2>&1; then
-    with_openclaw_env openclaw gateway stop >/dev/null 2>&1 || true
+
+  terminate_pid_soft_hard() {
+    local pid="$1"
+    [[ -n "${pid}" ]] || return 0
+    [[ "${pid}" =~ ^[0-9]+$ ]] || return 0
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      return 0
+    fi
+    kill "${pid}" >/dev/null 2>&1 || true
     sleep 1
-  fi
+    if kill -0 "${pid}" >/dev/null 2>&1; then
+      kill -9 "${pid}" >/dev/null 2>&1 || true
+    fi
+  }
+
+  # Try graceful shutdown first regardless of health state.
+  with_openclaw_env openclaw gateway stop >/dev/null 2>&1 || true
+  sleep 1
+
   if [[ -f "${pid_file}" ]]; then
     local pid
     pid="$(cat "${pid_file}" 2>/dev/null || true)"
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      kill "${pid}" >/dev/null 2>&1 || true
-      sleep 1
-      if kill -0 "${pid}" >/dev/null 2>&1; then
-        kill -9 "${pid}" >/dev/null 2>&1 || true
-      fi
-    fi
+    terminate_pid_soft_hard "${pid}"
     rm -f "${pid_file}"
+  fi
+
+  # Kill orphaned gateway processes not tracked by .gateway.pid.
+  if command -v pgrep >/dev/null 2>&1; then
+    local orphan_pid=""
+    # Common process names across OpenClaw builds.
+    while read -r orphan_pid; do
+      [[ -n "${orphan_pid}" ]] || continue
+      if [[ "${orphan_pid}" == "$$" || "${orphan_pid}" == "${PPID:-}" ]]; then
+        continue
+      fi
+      terminate_pid_soft_hard "${orphan_pid}"
+    done < <(
+      {
+        pgrep -f "openclaw-gateway" || true
+        pgrep -f "openclaw gateway run" || true
+        pgrep -f "openclaw.*gateway" || true
+      } | sort -u
+    )
+  fi
+
+  # Last resort: free configured TCP port if still occupied.
+  if command -v ss >/dev/null 2>&1; then
+    local port_pid=""
+    while read -r port_pid; do
+      terminate_pid_soft_hard "${port_pid}"
+    done < <(
+      ss -ltnp 2>/dev/null \
+        | awk -v p=":${openclaw_port}" '$4 ~ p"$" {print $NF}' \
+        | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+        | sort -u
+    )
   fi
 }
 

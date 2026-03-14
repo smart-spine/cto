@@ -32,6 +32,7 @@ RUNTIME_DEFAULT_MODEL=""
 RUNTIME_TARGET_MODEL=""
 RUNTIME_DEFER_MODEL_PRIMARY="false"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
+GATEWAY_TOKEN_MODE="${GATEWAY_TOKEN_MODE:-prompt}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_GATEWAY_START="${SKIP_GATEWAY_START:-false}"
 SKIP_CODEX_LOGIN="${SKIP_CODEX_LOGIN:-false}"
@@ -42,6 +43,7 @@ SKIP_CODE_AGENT_HEALTHCHECK="${SKIP_CODE_AGENT_HEALTHCHECK:-${SKIP_CODEX_HEALTHC
 CODE_AGENT_HEALTHCHECK_RETRIES="${CODE_AGENT_HEALTHCHECK_RETRIES:-${CODEX_HEALTHCHECK_RETRIES}}"
 CODE_AGENT_CLI="${CODE_AGENT_CLI:-}"
 CODE_AGENT_AUTH_METHOD="${CODE_AGENT_AUTH_METHOD:-}"
+CLAUDE_BROWSER_LOGIN_TIMEOUT_SECONDS="${CLAUDE_BROWSER_LOGIN_TIMEOUT_SECONDS:-180}"
 SKIP_MAIN_AGENT_SMOKE="${SKIP_MAIN_AGENT_SMOKE:-false}"
 MODEL_PROVIDERS_ALLOWLIST_DEFAULT="openai,openai-codex"
 MODEL_PROVIDERS_ALLOWLIST="${MODEL_PROVIDERS_ALLOWLIST:-${MODEL_PROVIDERS_ALLOWLIST_DEFAULT}}"
@@ -673,6 +675,31 @@ probe_claude_oauth_token_live() {
   return 1
 }
 
+is_claude_subscription_logged_in() {
+  local status_json=""
+  status_json="$(claude auth status --json 2>/dev/null || true)"
+  if [[ -z "${status_json}" ]]; then
+    return 1
+  fi
+  printf "%s" "${status_json}" | jq -e '
+    .loggedIn == true and
+    ((.authMethod // "") | ascii_downcase) != "api_key"
+  ' >/dev/null 2>&1
+}
+
+run_claude_auth_login_with_timeout() {
+  local timeout_seconds="${CLAUDE_BROWSER_LOGIN_TIMEOUT_SECONDS}"
+  if ! [[ "${timeout_seconds}" =~ ^[0-9]+$ ]] || [[ "${timeout_seconds}" -lt 30 ]]; then
+    timeout_seconds=180
+  fi
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground "${timeout_seconds}"s env -u CLAUDE_CODE_OAUTH_TOKEN claude auth login
+  else
+    env -u CLAUDE_CODE_OAUTH_TOKEN claude auth login
+  fi
+}
+
 generate_gateway_token() {
   local token=""
   if command -v openssl >/dev/null 2>&1; then
@@ -689,15 +716,109 @@ PY
   printf "%s" "${token}"
 }
 
+discover_existing_gateway_token() {
+  local env_file="${OPENCLAW_HOME}/.env"
+  local config_path="${OPENCLAW_HOME}/openclaw.json"
+  local token=""
+
+  if [[ -f "${env_file}" ]]; then
+    token="$(grep -E '^OPENCLAW_GATEWAY_TOKEN=' "${env_file}" | tail -n1 | cut -d'=' -f2- || true)"
+    token="$(printf "%s" "${token}" | tr -d '\r\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    if [[ -n "${token}" ]]; then
+      printf "%s" "${token}"
+      return 0
+    fi
+  fi
+
+  if [[ -f "${config_path}" ]]; then
+    token="$(python3 - "${config_path}" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print("", end="")
+    raise SystemExit(0)
+
+gateway = data.get("gateway") or {}
+auth = gateway.get("auth") if isinstance(gateway, dict) else {}
+token = auth.get("token") if isinstance(auth, dict) else ""
+if isinstance(token, str):
+    print(token.strip(), end="")
+PY
+)"
+    token="$(printf "%s" "${token}" | tr -d '\r\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    if [[ -n "${token}" ]]; then
+      printf "%s" "${token}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 resolve_gateway_token() {
+  local existing_token=""
+
   if [[ -n "${OPENCLAW_GATEWAY_TOKEN}" ]]; then
     log_info "Using OPENCLAW_GATEWAY_TOKEN from environment."
     return 0
   fi
 
-  OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
-  GATEWAY_TOKEN_GENERATED="true"
-  log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+  existing_token="$(discover_existing_gateway_token || true)"
+  if [[ -n "${existing_token}" ]]; then
+    OPENCLAW_GATEWAY_TOKEN="${existing_token}"
+    log_info "Reusing existing OPENCLAW_GATEWAY_TOKEN from current OpenClaw state."
+    return 0
+  fi
+
+  if [[ "${NON_INTERACTIVE}" == "true" ]]; then
+    case "${GATEWAY_TOKEN_MODE}" in
+      auto|prompt|"")
+        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+        GATEWAY_TOKEN_GENERATED="true"
+        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically (non-interactive mode)."
+        ;;
+      manual)
+        die "GATEWAY_TOKEN_MODE=manual requires OPENCLAW_GATEWAY_TOKEN to be set."
+        ;;
+      *)
+        die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
+        ;;
+    esac
+    return 0
+  fi
+
+  case "${GATEWAY_TOKEN_MODE}" in
+    auto)
+      OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+      GATEWAY_TOKEN_GENERATED="true"
+      log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+      ;;
+    manual)
+      prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
+      ;;
+    prompt|"")
+      echo "Choose OPENCLAW_GATEWAY_TOKEN setup:"
+      echo "  1) Auto-generate now (recommended)"
+      echo "  2) Enter manually"
+      local choice=""
+      read -r -p "Choice [1/2] (default 1): " choice
+      if [[ "${choice}" == "2" ]]; then
+        prompt_secret OPENCLAW_GATEWAY_TOKEN "Enter OPENCLAW_GATEWAY_TOKEN"
+      else
+        OPENCLAW_GATEWAY_TOKEN="$(generate_gateway_token)"
+        GATEWAY_TOKEN_GENERATED="true"
+        log_info "Generated OPENCLAW_GATEWAY_TOKEN automatically."
+      fi
+      ;;
+    *)
+      die "Invalid GATEWAY_TOKEN_MODE='${GATEWAY_TOKEN_MODE}'. Use: prompt, auto, or manual."
+      ;;
+  esac
 }
 
 print_gateway_token_notice() {
@@ -747,8 +868,8 @@ gateway.setdefault("bind", "loopback")
 gateway["port"] = port
 gateway.setdefault("auth", {"mode": "token", "token": gateway_token})
 if isinstance(gateway.get("auth"), dict):
-    gateway["auth"].setdefault("mode", "token")
-    gateway["auth"].setdefault("token", gateway_token)
+    gateway["auth"]["mode"] = "token"
+    gateway["auth"]["token"] = gateway_token
 
 auth = data.setdefault("auth", {})
 profiles = auth.setdefault("profiles", {})
@@ -891,46 +1012,6 @@ run_claude_setup_token_and_capture() {
   return 0
 }
 
-resolve_runtime_setup_token() {
-  OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
-  if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
-    return 0
-  fi
-
-  CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${CLAUDE_CODE_OAUTH_TOKEN}")"
-  if is_valid_claude_oauth_token "${CLAUDE_CODE_OAUTH_TOKEN}"; then
-    OPENCLAW_RUNTIME_SETUP_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}"
-    log_info "Reusing CLAUDE_CODE_OAUTH_TOKEN for OpenClaw runtime setup-token."
-    return 0
-  fi
-
-  user_step "Step 1: claude setup-token"
-  user_step "If OpenClaw asks for token input, paste the token printed by claude setup-token."
-  if ! run_claude_setup_token_and_capture; then
-    die "claude setup-token failed."
-  fi
-  OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
-  if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
-    return 0
-  fi
-
-  local token_attempt=0
-  while (( token_attempt < 3 )); do
-    token_attempt=$((token_attempt + 1))
-    user_step "Paste setup-token value (starts with sk-ant-oat...)."
-    user_step "If you see this prompt, the token was already printed above by claude setup-token."
-    prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
-    OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
-    if is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
-      return 0
-    fi
-    log_warn "Invalid setup-token format. Retry ${token_attempt}/3."
-    OPENCLAW_RUNTIME_SETUP_TOKEN=""
-  done
-
-  die "Could not capture a valid Anthropic setup-token after 3 attempts."
-}
-
 apply_runtime_setup_token_via_openclaw() {
   local token="$1"
   local out=""
@@ -1032,10 +1113,15 @@ run_claude_healthcheck() {
 
     if [[ "${CODE_AGENT_AUTH_METHOD}" == "api_key" ]]; then
       output="$(ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" claude -p "${prompt}" --output-format text --permission-mode default 2>&1 || true)"
-    elif [[ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]]; then
-      output="$(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" claude -p "${prompt}" --output-format text --permission-mode default 2>&1 || true)"
     else
-      output="$(claude -p "${prompt}" --output-format text --permission-mode default 2>&1 || true)"
+      if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]]; then
+        output="$(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" claude -p "${prompt}" --output-format text --permission-mode default 2>&1 || true)"
+      elif ! is_claude_subscription_logged_in; then
+        output="Claude subscription session is not logged in. Run: claude auth login"
+      else
+        # Subscription login should use Claude's persisted auth session, not setup-token env vars.
+        output="$(env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "${prompt}" --output-format text --permission-mode default 2>&1 || true)"
+      fi
     fi
     printf "%s\n" "${output}" >"${hc_log}"
 
@@ -1111,6 +1197,8 @@ collect_runtime_and_agent_secrets() {
       ;;
   esac
 
+  user_step "You can control gateway token mode via GATEWAY_TOKEN_MODE=prompt|auto|manual."
+
   resolve_gateway_token
 }
 
@@ -1136,15 +1224,28 @@ authenticate_runtime_provider() {
     anthropic:oauth)
       user_section "OpenClaw runtime setup-token"
       user_step "Running official Anthropic setup-token flow."
+      user_step "Step 1: claude setup-token"
+      user_step "If OpenClaw asks for token input, paste the token printed by claude setup-token."
       ensure_claude_cli_for_runtime_oauth
-      resolve_runtime_setup_token
+      if ! run_claude_setup_token_and_capture; then
+        die "claude setup-token failed."
+      fi
 
       local token_attempt=0
       local apply_out=""
+      OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
       while (( token_attempt < 3 )); do
         token_attempt=$((token_attempt + 1))
-        OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
-        is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || die "Invalid runtime setup-token value."
+
+        if ! is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}"; then
+          user_step "Paste setup-token value (starts with sk-ant-oat...)."
+          prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
+          OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
+        fi
+        is_valid_claude_oauth_token "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || {
+          log_warn "Invalid setup-token format. Retry ${token_attempt}/3."
+          continue
+        }
 
         user_step "Step 2: applying token to OpenClaw auth profile (${RUNTIME_PROFILE_ID})."
         apply_out="$(apply_runtime_setup_token_via_openclaw "${OPENCLAW_RUNTIME_SETUP_TOKEN}" || true)"
@@ -1153,10 +1254,6 @@ authenticate_runtime_provider() {
           printf "%s\n" "${apply_out}" >&2
         fi
 
-        # Compatibility fallback: runtime lanes currently expect ANTHROPIC_API_KEY.
-        ANTHROPIC_API_KEY="${OPENCLAW_RUNTIME_SETUP_TOKEN}"
-        upsert_env_var "${OPENCLAW_HOME}/.env" "ANTHROPIC_API_KEY" "${ANTHROPIC_API_KEY}"
-
         apply_runtime_target_model_primary
         if run_runtime_auth_probe; then
           log_info "Anthropic runtime setup-token auth probe passed."
@@ -1164,12 +1261,11 @@ authenticate_runtime_provider() {
         fi
 
         log_warn "Anthropic runtime auth probe failed (attempt ${token_attempt}/3)."
-        if (( token_attempt < 3 )); then
-          user_step "OpenClaw could not verify auth with current token."
-          user_step "Paste another setup-token (you can reuse one printed above)."
-          OPENCLAW_RUNTIME_SETUP_TOKEN=""
-          prompt_secret OPENCLAW_RUNTIME_SETUP_TOKEN "Enter OpenClaw runtime setup-token"
+        user_step "OpenClaw could not verify auth. Re-run setup-token and retry."
+        if ! run_claude_setup_token_and_capture; then
+          log_warn "claude setup-token retry did not complete."
         fi
+        OPENCLAW_RUNTIME_SETUP_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN}")"
       done
 
       die "OpenClaw runtime Anthropic setup-token authentication failed after 3 attempts."
@@ -1208,47 +1304,56 @@ authenticate_selected_code_agent() {
           die "Claude Code API key auth probe failed."
         fi
       else
-        local setup_log=""
-        local extracted_token=""
         user_section "Claude subscription login"
-        user_step "Claude may print a URL and wait for a one-time code."
-        user_step "Open the URL in your browser, complete login, then paste the code into terminal prompt."
-        if command -v script >/dev/null 2>&1; then
-          setup_log="$(mktemp)"
-          if ! script -q -e -c "claude setup-token" "${setup_log}"; then
-            rm -f "${setup_log}"
-            die "Claude Code subscription setup-token failed."
+        CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${CLAUDE_CODE_OAUTH_TOKEN}")"
+
+        if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]] && is_valid_claude_oauth_token "${CLAUDE_CODE_OAUTH_TOKEN}"; then
+          if probe_claude_oauth_token_live "${CLAUDE_CODE_OAUTH_TOKEN}"; then
+            log_info "Using existing CLAUDE_CODE_OAUTH_TOKEN for Claude Code."
+            return 0
           fi
-          extracted_token="$(extract_claude_oauth_token_from_log "${setup_log}" || true)"
-          rm -f "${setup_log}"
-          extracted_token="$(normalize_claude_oauth_token_input "${extracted_token}")"
-          if [[ -n "${extracted_token}" ]] && is_valid_claude_oauth_token "${extracted_token}"; then
-            CLAUDE_CODE_OAUTH_TOKEN="${extracted_token}"
-          fi
+          log_warn "Existing CLAUDE_CODE_OAUTH_TOKEN is invalid; switching to interactive login."
+          CLAUDE_CODE_OAUTH_TOKEN=""
+        fi
+
+        if is_claude_subscription_logged_in; then
+          log_info "Claude Code subscription session is already logged in."
         else
-          if ! claude setup-token; then
-            die "Claude Code subscription setup-token failed."
+          user_step "Complete Claude subscription login in browser/device flow."
+          user_step "No token paste is needed in this step."
+          user_step "If browser login does not complete in time, script will fallback to setup-token prompt."
+          if ! run_claude_auth_login_with_timeout; then
+            log_warn "Claude browser login did not complete in time; falling back to setup-token."
           fi
         fi
 
-        # Some environments do not persist setup-token automatically.
-        if ! claude auth status --json | jq -e '.loggedIn == true' >/dev/null 2>&1; then
+        if ! is_claude_subscription_logged_in; then
           local token_attempt=0
-          CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${CLAUDE_CODE_OAUTH_TOKEN}")"
+          user_section "Claude setup-token fallback"
+          user_step "Running claude setup-token and validating pasted token."
+          if ! run_claude_setup_token_and_capture; then
+            die "Claude setup-token fallback failed."
+          fi
+          CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${OPENCLAW_RUNTIME_SETUP_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN}}")"
           while true; do
             if is_valid_claude_oauth_token "${CLAUDE_CODE_OAUTH_TOKEN}" && probe_claude_oauth_token_live "${CLAUDE_CODE_OAUTH_TOKEN}"; then
+              log_info "Claude setup-token fallback validated."
               break
             fi
             token_attempt=$((token_attempt + 1))
             if [[ "${token_attempt}" -ge 3 ]]; then
-              die "Claude Code subscription login did not complete. Token validation failed after ${token_attempt} attempt(s)."
+              die "Claude Code subscription fallback token validation failed after ${token_attempt} attempt(s)."
             fi
             user_step "Paste full OAuth token value (starts with sk-ant-oat...)."
-            user_step "If you see this prompt, Claude already printed the token above."
-            user_step "Copy that highlighted token and paste it here."
+            user_step "If you see this prompt, token was already printed above by claude setup-token."
             prompt_secret CLAUDE_CODE_OAUTH_TOKEN "Enter CLAUDE_CODE_OAUTH_TOKEN"
             CLAUDE_CODE_OAUTH_TOKEN="$(normalize_claude_oauth_token_input "${CLAUDE_CODE_OAUTH_TOKEN}")"
           done
+        fi
+
+        if is_claude_subscription_logged_in; then
+          # Prefer persisted Claude session when available.
+          CLAUDE_CODE_OAUTH_TOKEN=""
         fi
       fi
       ;;
