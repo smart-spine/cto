@@ -53,6 +53,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--callback-timeout", type=int, default=120, help="Timeout for callback command (seconds)")
     p.add_argument(
+        "--sandbox",
+        choices=["auto", "workspace-write", "danger-full-access"],
+        default="auto",
+        help="Codex sandbox mode. auto starts with workspace-write and falls back to danger-full-access on Landlock failures.",
+    )
+    p.add_argument(
         "--callback-message",
         help="Optional callback message template. Supports {status}, {exit_code}, {used_attempts}, {session_id}.",
     )
@@ -71,13 +77,14 @@ def load_prompt(args: argparse.Namespace) -> str:
 
 
 def build_cmd(args: argparse.Namespace) -> list[str]:
+    sandbox_mode = "workspace-write" if args.sandbox == "auto" else args.sandbox
     cmd = [
         "codex",
         "exec",
         "--ephemeral",
         "--skip-git-repo-check",
         "--sandbox",
-        "workspace-write",
+        sandbox_mode,
         "--cd",
         args.workdir,
         "--model",
@@ -122,6 +129,21 @@ def is_retryable(stderr: str, stdout: str, returncode: int) -> bool:
         "429",
     ]
     return returncode != 0 and any(m in text for m in retry_markers)
+
+
+def is_landlock_sandbox_failure(stderr: str, stdout: str, returncode: int) -> bool:
+    if returncode == 0:
+        return False
+    text = f"{stdout}\n{stderr}".lower()
+    markers = [
+        "landlockrestrict",
+        "landlock",
+        "sandbox restriction",
+        "permission denied",
+        "operation not permitted",
+    ]
+    # Keep it strict: only treat as sandbox escalation candidate if landlock/sandbox is present.
+    return ("landlock" in text or "sandbox" in text) and any(m in text for m in markers)
 
 
 def utc_now() -> str:
@@ -448,6 +470,7 @@ def main() -> int:
     if model_warning:
         print(f"[codex-guard] model fallback: {model_warning}", file=sys.stderr, flush=True)
     cmd = build_cmd(args)
+    current_sandbox = "workspace-write" if args.sandbox == "auto" else args.sandbox
     attempts: list[dict] = []
     state_path = Path(args.state_file).resolve()
     state = load_state(state_path)
@@ -490,6 +513,7 @@ def main() -> int:
         attempt = {
             "attempt": idx,
             "command": " ".join(shlex.quote(part) for part in cmd),
+            "sandbox": current_sandbox,
             "timeout_seconds": args.timeout,
             "model_requested": requested_model,
             "model_resolved": resolved_model,
@@ -546,6 +570,29 @@ def main() -> int:
                 str(run_result["stderr"]), str(run_result["stdout"]), int(run_result["exit_code"])
             ):
                 time.sleep(args.backoff * idx)
+                continue
+
+            if (
+                args.sandbox == "auto"
+                and current_sandbox == "workspace-write"
+                and idx < args.retries
+                and is_landlock_sandbox_failure(
+                    str(run_result["stderr"]), str(run_result["stdout"]), int(run_result["exit_code"])
+                )
+            ):
+                current_sandbox = "danger-full-access"
+                cmd = build_cmd(args)
+                # Replace sandbox arg value in command (build_cmd used auto default above).
+                if "--sandbox" in cmd:
+                    sidx = cmd.index("--sandbox")
+                    if sidx + 1 < len(cmd):
+                        cmd[sidx + 1] = current_sandbox
+                print(
+                    "[codex-guard] detected Landlock sandbox failure; switching sandbox to danger-full-access",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                time.sleep(min(args.backoff * idx, 5.0))
                 continue
 
             break
