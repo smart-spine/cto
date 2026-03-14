@@ -36,11 +36,11 @@ You need:
 - Telegram bot token (from BotFather)
 - Telegram numeric user ID
 
-Depending on selected auth flow, you may also need:
-- OpenAI API key (`OPENAI_API_KEY`)
-- Anthropic API key (`ANTHROPIC_API_KEY`)
-- OpenAI subscription login for Codex OAuth
-- Anthropic subscription login for Claude Code
+CTO supports exactly 4 authentication paths:
+1. **OpenAI API key** (`OPENAI_API_KEY`)
+2. **Anthropic API key** (`ANTHROPIC_API_KEY`)
+3. **OpenAI OAuth subscription** (Codex login flow)
+4. **Anthropic OAuth subscription** (`claude setup-token` flow)
 
 Out of scope in this guide:
 - EC2 provisioning
@@ -51,24 +51,22 @@ If needed, use AWS docs:
 
 ## Deploy On A Clean EC2
 
-### 0) Prepare credentials (choose your auth path)
+### 0) Prepare credentials (choose 1 of 4 auth paths)
 
 Before running scripts on EC2, prepare:
 - `TELEGRAM_BOT_TOKEN` (always required)
-- runtime/code-agent credentials based on your choices in Script `01`
+- credentials for one of these paths:
 
-Auth matrix:
+| Path | Coding agent auth | OpenClaw runtime auth | You need |
+|---|---|---|---|
+| 1. OpenAI API key | Codex with API key | OpenAI with API key | `OPENAI_API_KEY` |
+| 2. Anthropic API key | Claude Code with API key | Anthropic with API key | `ANTHROPIC_API_KEY` |
+| 3. OpenAI OAuth subscription | Codex subscription login | OpenAI Codex OAuth | OpenAI subscription access |
+| 4. Anthropic OAuth subscription | Claude `setup-token` | Anthropic `setup-token` | Anthropic subscription access |
 
-| Component | Option | What you need |
-|---|---|---|
-| Coding agent CLI | Codex + subscription | OpenAI browser/device login |
-| Coding agent CLI | Codex + API key | `OPENAI_API_KEY` |
-| Coding agent CLI | Claude Code + subscription | Anthropic browser login (with setup-token fallback if browser flow stalls) |
-| Coding agent CLI | Claude Code + API key | `ANTHROPIC_API_KEY` |
-| OpenClaw runtime | OpenAI + API key | `OPENAI_API_KEY` |
-| OpenClaw runtime | OpenAI + Codex OAuth | OpenAI browser/device login |
-| OpenClaw runtime | Anthropic + API key | `ANTHROPIC_API_KEY` |
-| OpenClaw runtime | Anthropic + setup-token | `claude setup-token` interactive flow |
+Notes:
+- Path 4 is terminal-friendly and headless-friendly: script uses `claude setup-token` (no browser callback server required on EC2).
+- Script `01` reuses Claude setup-token between code-agent auth and runtime auth when possible.
 
 #### 0.1) Create OpenAI API key (if you choose OpenAI API key flow)
 
