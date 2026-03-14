@@ -833,7 +833,6 @@ main() {
   run_health_checks
 
   log_info "Stage 8/8: Applying Telegram binding for CTO."
-  echo "Deploy ready. Choose how to bind CTO bot: Telegram topic link or direct chat."
   collect_binding_inputs
   apply_cto_binding "${BIND_MODE}" "${BIND_GROUP_ID}" "${BIND_TOPIC_ID}" "${BIND_DIRECT_USER_ID}"
 
