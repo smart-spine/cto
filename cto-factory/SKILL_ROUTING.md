@@ -13,6 +13,7 @@ Mandatory use:
 
 | Task intent | Primary skill(s) | Secondary skill(s) | Do not use |
 | --- | --- | --- | --- |
+| Micro scratch code task (ephemeral, no project/config/apply mutation) | `factory-codegen` | `factory-keepalive` (if expected >90s) | full intake survey/sign-off option trees |
 | Build/create a new agent | `factory-create-agent`, `factory-skill-creator`, `factory-backup` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
 | Add/update skills in an existing agent | `factory-skill-creator` | `factory-codegen`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
 | Modify existing code/config behavior | `factory-codegen`, `factory-backup` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-create-agent` |

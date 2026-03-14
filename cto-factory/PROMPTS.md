@@ -22,6 +22,19 @@ Guard rules:
 - Do NOT start CODE until explicit sign-off exists.
 - If requirements change, regenerate this packet and request sign-off again.
 
+## MICRO SCRATCH FAST-PATH (NO SURVEY)
+Use this path when ALL are true:
+- user asks for a tiny/ephemeral coding task (for example random number script, one-off hello world, quick parser demo),
+- no project/config mutation is requested,
+- no apply/restart/deploy action is requested.
+
+Rules:
+- do NOT run multi-question intake or A/B/C survey,
+- send one short PLAN line and start execution in the same turn,
+- default to the fastest safe runtime when user did not specify language,
+- still enforce remembered code-agent delegation protocol for any file generation/execution,
+- return concise execution evidence (command, exit code, result value).
+
 ## CODE AGENT WORKER CONTRACT
 Use this contract for delegated coding tasks with the remembered local code agent.
 
@@ -37,10 +50,15 @@ Mandatory constraints:
   - `CODE_AGENT_PROTOCOLS.md`
 - If active agent is Codex, DO NOT run `codex` or `codex exec` recursively inside worker prompt.
 - Implement files directly in the target workspace.
+- If delegated execution fails, DO NOT write/edit files manually as fallback; retry through the remembered code agent.
+- If delegated execution fails, DO NOT use `sessions_spawn`/subagent flow to mutate files as fallback.
+- If retries are exhausted, return `BLOCKED: CODE_AGENT_EXEC_FAILED` with command + stderr evidence.
+- Do NOT provide "manual direct edit" fallback options to the user after code-agent failure.
 - Keep diffs minimal and deterministic.
 - Never output plaintext secrets.
 - Run tests immediately after generation.
 - If tests fail, fix and rerun until green.
+- Shell wrapper rule: if command uses `set -o pipefail` or strict parameter expansion, run it under `bash` (never `sh`).
 
 ## CODE AGENT PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
 Before implementation, remembered code agent MUST return a plan package.

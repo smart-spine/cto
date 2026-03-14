@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,75 @@ def cli_available(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-def detect_code_agent(openclaw_root: Path) -> tuple[str | None, str, list[str]]:
+def run_cmd(cmd: list[str], timeout: int = 8) -> tuple[int, str]:
+    try:
+        p = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        out = (p.stdout or "") + (("\n" + p.stderr) if p.stderr else "")
+        return p.returncode, out.strip()
+    except Exception as exc:  # noqa: BLE001
+        return 99, str(exc)
+
+
+def has_nonempty_env(name: str) -> bool:
+    return bool((os.getenv(name) or "").strip())
+
+
+def claude_ready() -> tuple[bool, str]:
+    if not cli_available("claude"):
+        return False, "binary_missing"
+    if has_nonempty_env("ANTHROPIC_API_KEY") or has_nonempty_env("CLAUDE_CODE_OAUTH_TOKEN"):
+        return True, "runtime_env_key"
+    code, out = run_cmd(["claude", "auth", "status", "--json"], timeout=8)
+    if code != 0:
+        return False, f"auth_status_failed:{out[:160]}"
+    try:
+        payload = json.loads(out)
+        if isinstance(payload, dict) and bool(payload.get("loggedIn")):
+            return True, "claude_auth_login"
+        return False, "claude_logged_out"
+    except Exception:  # noqa: BLE001
+        return False, "auth_status_parse_failed"
+
+
+def codex_ready() -> tuple[bool, str]:
+    if not cli_available("codex"):
+        return False, "binary_missing"
+    if has_nonempty_env("OPENAI_API_KEY"):
+        return True, "runtime_env_key"
+    # Primary path for modern Codex CLI builds.
+    code, out = run_cmd(["codex", "login", "status"], timeout=8)
+    if code == 0:
+        text = out.lower()
+        if "logged in" in text:
+            return True, "codex_login_status"
+        if "not logged" in text or "logged out" in text:
+            return False, "codex_logged_out"
+
+    # Compatibility path for older builds that exposed `auth status`.
+    code2, out2 = run_cmd(["codex", "auth", "status", "--json"], timeout=8)
+    if code2 == 0:
+        try:
+            payload = json.loads(out2)
+            if isinstance(payload, dict) and bool(payload.get("loggedIn")):
+                return True, "codex_auth_login"
+            return False, "codex_logged_out"
+        except Exception:  # noqa: BLE001
+            text = out2.lower()
+            if "logged in" in text and "false" not in text:
+                return True, "codex_auth_text"
+            if "not logged" in text or "logged out" in text:
+                return False, "codex_logged_out_text"
+
+    return False, f"codex_login_unverified:{(out or out2)[:160]}"
+
+
+def detect_code_agent(openclaw_root: Path) -> tuple[str | None, str, list[str], dict[str, str]]:
     candidates: list[str] = []
     env_cli = normalize_cli(os.getenv("OPENCLAW_CODE_AGENT_CLI"))
     if env_cli:
@@ -55,12 +124,20 @@ def detect_code_agent(openclaw_root: Path) -> tuple[str | None, str, list[str]]:
         if fallback not in candidates:
             candidates.append(fallback)
 
+    readiness: dict[str, str] = {}
     for cli in candidates:
-        if cli_available(cli):
+        ok = False
+        reason = "unknown"
+        if cli == "claude":
+            ok, reason = claude_ready()
+        elif cli == "codex":
+            ok, reason = codex_ready()
+        readiness[cli] = reason
+        if ok:
             source = "runtime_env" if cli == env_cli else ("openclaw_env_file" if cli == file_cli else "binary_scan")
-            return cli, source, candidates
+            return cli, source, candidates, readiness
 
-    return None, "not_found", candidates
+    return None, "not_found", candidates, readiness
 
 
 def memory_paths(openclaw_root: Path) -> dict[str, Path]:
@@ -141,8 +218,12 @@ def read_existing(openclaw_root: Path) -> tuple[dict[str, Any] | None, str | Non
 
 def cmd_ensure(args: argparse.Namespace) -> int:
     openclaw_root = resolve_openclaw_root(args)
-    cli, detected_from, candidates = detect_code_agent(openclaw_root)
+    cli, detected_from, candidates, readiness = detect_code_agent(openclaw_root)
     if not cli:
+        paths = memory_paths(openclaw_root)
+        for stale in (paths["memory_json"], paths["facts_md"]):
+            if stale.exists():
+                stale.unlink()
         print(
             json.dumps(
                 {
@@ -150,6 +231,7 @@ def cmd_ensure(args: argparse.Namespace) -> int:
                     "error": "no_supported_code_agent_found",
                     "supported": ["codex", "claude"],
                     "candidateOrder": candidates,
+                    "candidateReadiness": readiness,
                     "openclawRoot": str(openclaw_root),
                 },
                 ensure_ascii=False,

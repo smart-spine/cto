@@ -41,9 +41,13 @@ Safety:
 - before gateway restart, run runtime detector:
   - `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
 - preferred restart ACT command:
-  - `OPENCLAW_ROOT="$OPENCLAW_ROOT" nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &`.
+  - `OPENCLAW_ROOT="$OPENCLAW_ROOT" nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" >/dev/null 2>&1 &`.
 - forbidden for restart: native `gateway` tool call with `action=\"restart\"`.
 - forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
 - forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
 - forbidden: `exec` with `background=true` for direct `codex_guarded_exec.py` runs.
+- forbidden: direct project file mutation via shell redirection/heredoc (`>`, `>>`, `cat <<EOF`), ad-hoc interpreter writes, or manual patching as a fallback for code/config tasks.
+- if remembered code-agent execution fails, do NOT mutate files manually; retry via code agent or return `BLOCKED: CODE_AGENT_EXEC_FAILED`.
+- forbidden: `sessions_spawn`/`sessions_send` to perform file-writing/code mutation tasks; these tools are validation/orchestration-only.
 - for long code-agent executions expected to exceed 90s, preferred path is `cto_async_task.py start ... --cmd "<remembered code-agent command>"` with heartbeat callbacks.
+- when running delegated shell commands, prefer `bash` execution context; do not use `sh` for commands that include `set -o pipefail` or strict parameter expansion.

@@ -9,6 +9,8 @@ Rules:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" show --openclaw-root "$OPENCLAW_ROOT"`
 - Follow concrete per-agent command contract in `CODE_AGENT_PROTOCOLS.md`.
 - This skill adds orchestration requirements only; it does not redefine generic mutation policy.
+- ALL file mutations MUST come from remembered code-agent execution output.
+- direct file mutation fallback (shell redirection/heredoc writes, ad-hoc interpreter writes, manual patch edits) is forbidden.
 - prefer incremental edits,
 - keep config machine-readable,
 - preserve SecretRef credential objects,
@@ -24,11 +26,14 @@ Rules:
 - long polls (`timeout=1200000`) are allowed only when using detached async supervisor flow after the current user turn already returned.
 - treat any behavior mutation (including cron payload/prompt/config edits) as code/config work.
 - this skill is intended for generic code/config mutations. Do NOT use this skill for generating entirely new agents (use `factory-create-agent` for that).
+- for micro scratch requests (ephemeral, no project/config/apply mutation), skip option-style intake and execute directly via remembered code agent.
 - when calling remembered code agent include exact instruction: `Write Unit Tests & Verify, make changes in case of failures and revalidate. Repeat until success.`.
 - required invocation path for code work:
   - Codex: guarded wrapper through `exec`.
   - Claude: non-interactive Claude CLI command as defined in `CODE_AGENT_PROTOCOLS.md`.
 - naked `codex exec` is forbidden.
+- delegated command wrappers MUST execute via `bash`; do NOT run them with `sh`.
+- forbidden Claude flags in this workflow: `--permission-mode bypassPermissions`, `--dangerously-skip-permissions`.
 - before delegation, detect current provider/model context from root `openclaw.json` and keep generated model config aligned with it.
 - validate model id before run:
   - if malformed/provider-prefixed id is detected (for example `openai-codex/gpt-5.3-codex`), normalize to valid token (for example `gpt-5.3-codex`),
@@ -43,7 +48,11 @@ Rules:
 - do not run broad host diagnostics by default (`find $HOME`, `env | grep token|secret`) for regular coding tasks.
 - if task parses feed/web content, enforce sanitization and add tests for raw-markup suppression.
 - if delegation hangs or returns retryable transport errors, rerun with bounded retries and timeout.
-- `sessions_spawn`/`sessions_send` may be used only for black-box runtime checks against created agents, never for primary code generation.
+- if delegation exits non-zero, rerun through the same remembered code agent with corrected command/flags/prompt; do not switch to direct manual edits.
+- if bounded retries are exhausted, stop with `BLOCKED: CODE_AGENT_EXEC_FAILED`.
+- after retries are exhausted, do NOT offer user a manual direct-file-edit alternative.
+- `sessions_spawn`/`sessions_send` MUST NOT be used for primary code/config mutation or as fallback when remembered code agent fails.
+- `sessions_spawn`/`sessions_send` may be used only for black-box runtime checks against already-built agents.
 - never report success unless all expected output files exist and are non-empty.
 - for non-trivial tasks, you MUST enforce `PLAN -> IMPLEMENT -> AUDIT` code-agent loop.
 - `PLAN -> IMPLEMENT -> AUDIT` loop is mandatory for:
@@ -53,7 +62,7 @@ Rules:
   - any task with 3+ explicit requirements.
 
 Restriction:
-- direct implementation of `.js`, `.ts`, or `.py` logic is governed by `AGENTS.md` and is not restated here.
+- direct implementation of ANY project file content is forbidden; all mutations must be delegated through remembered code agent.
 
 Procedure for code tasks:
 1. Build a deterministic requirement checklist first:
@@ -63,7 +72,7 @@ Procedure for code tasks:
 4. PLAN phase delegation (remembered code agent MUST plan before coding):
    - prompt code agent to return only `CODEX_PLAN_JSON_BEGIN/END` block.
    - run delegated command and capture output. For long runs, you MUST wrap command in async supervisor:
-     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id>-plan --cwd <root_project_workspace> --cmd "<code_agent_command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id>-plan --cwd <root_project_workspace> --cmd "<code_agent_command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
    - when async path is used, poll status/log via `cto_async_task.py status|tail` and continue reporting until terminal state.
    - DO NOT pass `background=true` when executing this command.
    - validate plan block:
@@ -72,12 +81,12 @@ Procedure for code tasks:
 5. IMPLEMENT phase delegation and include exact line: `Write Unit Tests & Verify`.
    - Build command from remembered code-agent memory:
      - if `codeAgent=codex`:
-       - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
+       - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root_project_workspace> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" --callback-message "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}"`
      - if `codeAgent=claude`:
        - `claude -p "<prompt_with_same_contract_and_markers>" --output-format text --permission-mode default`
    - If remembered `codeAgent` is neither `codex` nor `claude`, stop with `BLOCKED: CODE_AGENT_UNAVAILABLE`.
    - for long runs, wrap command in async supervisor:
-     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cwd <root_project_workspace> --cmd "<code_agent_command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
+     - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" start --task-id <id> --cwd <root_project_workspace> --cmd "<code_agent_command>" --callback-agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" --callback-progress-message "ASYNC_TASK_HEARTBEAT task_id={task_id} status={status} elapsed={elapsed_seconds}s heartbeat={heartbeat_index}" --callback-message "ASYNC_TASK_COMPLETE task_id={task_id} status={status} exit_code={exit_code}"`
    - when async path is used, poll status/log via `cto_async_task.py status|tail` and continue reporting until terminal state.
    Ensure `--workdir` strictly points to the ROOT project location.
    - DO NOT pass `background=true` when executing this command.
@@ -88,6 +97,9 @@ Procedure for code tasks:
      - `process(action=list)`
      - if target session is still running, resume `timeout=45000` polling;
      - if target session is no longer running, proceed to verification gates (tests/config/artifacts/report parsing) and publish status without waiting for user ping.
+   - if delegated command exits non-zero, rerun IMPLEMENT through the same remembered code agent with corrected command/flags/prompt.
+   - if retries are exhausted, return `BLOCKED: CODE_AGENT_EXEC_FAILED` with exact command + stderr evidence.
+   - do NOT spawn subagents to write files when code-agent execution fails.
 6. Validate implementation report block:
    - code-agent response MUST include `CODEX_EXEC_REPORT_JSON_BEGIN/END`.
    - run:
