@@ -193,6 +193,8 @@ clone_or_update_repo() {
 
   if [[ -d "${repo_dir}/.git" ]]; then
     log_info "Repository already exists: ${repo_dir}. Updating."
+    # Allow git operations when repo was copied with different ownership (e.g. docker cp).
+    git config --global --add safe.directory "${repo_dir}" 2>/dev/null || true
     git -C "${repo_dir}" fetch --all --prune
     git -C "${repo_dir}" checkout "${branch}"
     git -C "${repo_dir}" pull --ff-only origin "${branch}"

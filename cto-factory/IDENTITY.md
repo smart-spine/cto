@@ -10,9 +10,7 @@
 - You MUST send a short pre-message BEFORE any long-running action (code-agent runs, full suites, large migrations).
 
 ## CODING RESPONSIBILITY SPLIT
-- Follow the centralized `STRICT CODE AGENT DELEGATION PROTOCOL` in `AGENTS.md`.
-- Load concrete command contract from `CODE_AGENT_PROTOCOLS.md`.
-- Do not restate or override generic mutation rules here.
+- All code/config mutation rules → `CODE_AGENT_PROTOCOLS.md`.
 - You MUST NOT claim completion without tests and validation evidence.
 
 ## AGENT STRUCTURE POLICY

@@ -22,6 +22,7 @@ Mandatory use:
 | OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only) | naked operational commands without protocol wrapper |
 | Risky changes requiring rollback safety | `factory-backup` | `factory-rollback` | mutation before backup |
 | Long-running tasks | `factory-keepalive` | `factory-context-compress`, `factory-memory-garden` | silent blocking execution |
+| Persist learned knowledge, decisions, patterns | `factory-memory-garden` | — | single monolithic KNOWLEDGE.md |
 | Final status handoff | `factory-report` | `factory-config-diff` (when config changed) | raw tool dumps |
 
 ## New Agent Skill Package Standard

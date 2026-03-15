@@ -20,9 +20,10 @@ Expected payload fields:
 
 Session rule:
 - On first runnable turn after deploy/restart, initialize memory with `ensure` and keep files in `.cto-brain`.
-- On first mutation step in a session, explicitly report remembered agent phrase:
+- On FIRST CODE step in a session, you MUST announce the remembered agent phrase as a standalone visible line in your response to the user BEFORE invoking any delegation command:
   - `codex remembered`, or
   - `claudecode remembered`.
+- This announcement is a hard protocol requirement, not optional commentary. Missing it is a protocol violation.
 
 If no supported code agent is found:
 - return `BLOCKED: CODE_AGENT_UNAVAILABLE` with command evidence.
@@ -33,6 +34,12 @@ If no supported code agent is found:
 - Direct manual mutation of ANY project file is forbidden (`.md`, `.json`, `.sh`, `.js`, `.ts`, `.py`, and others).
 - Manual fallback writes after delegation failure are forbidden (for example shell redirection/heredoc writes, ad-hoc interpreter writes, or manual patch edits used to bypass code-agent execution).
 - `sessions_spawn`/`sessions_send`/subagent mutation fallback is forbidden for primary code/config work.
+
+Exemptions from delegation requirement:
+- `.cto-brain/` operational state and memory garden writes are performed by CTO Python helper scripts, not through code-agent delegation.
+- git backup branch creation, git status/diff/checkpoint operations.
+- non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
+
 - Every delegation MUST include `Write Unit Tests & Verify`.
 - For non-trivial tasks, MUST run `PLAN -> IMPLEMENT -> AUDIT`.
 - Plan/exec outputs MUST include machine-checkable blocks:

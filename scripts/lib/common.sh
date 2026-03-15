@@ -67,6 +67,19 @@ run_as_root() {
   fi
 }
 
+mask_secret() {
+  local value="$1"
+  local len="${#value}"
+  if [[ "${len}" -le 4 ]]; then
+    printf '%s' "****"
+  else
+    local visible="${value: -4}"
+    local masked_len=$(( len - 4 ))
+    printf '%*s' "${masked_len}" '' | tr ' ' '*'
+    printf '%s' "${visible}"
+  fi
+}
+
 prompt_secret() {
   local var_name="$1"
   local prompt_text="$2"
@@ -89,11 +102,20 @@ prompt_secret() {
   if [[ "${optional}" == "true" ]]; then
     read -r -s -p "${prompt_text} (optional): " entered
     echo
+    if [[ -n "${entered}" ]]; then
+      printf '  %s accepted: %s\n' "✓" "$(mask_secret "${entered}")"
+    else
+      printf '  %s skipped (empty)\n' "–"
+    fi
   else
     while [[ -z "${entered}" ]]; do
       read -r -s -p "${prompt_text}: " entered
       echo
+      if [[ -z "${entered}" ]]; then
+        printf '  %s value cannot be empty, try again.\n' "✗"
+      fi
     done
+    printf '  %s accepted: %s\n' "✓" "$(mask_secret "${entered}")"
   fi
   printf -v "${var_name}" "%s" "${entered}"
 }
