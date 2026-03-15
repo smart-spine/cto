@@ -34,7 +34,6 @@ You need:
 - Ubuntu EC2 host
 - SSH access as user `ubuntu` with `sudo`
 - Telegram bot token (from BotFather)
-- Telegram numeric user ID
 
 CTO supports exactly 4 authentication paths:
 1. **OpenAI API key** (`OPENAI_API_KEY`)
@@ -51,11 +50,11 @@ If needed, use AWS docs:
 
 ## Deploy On A Clean EC2
 
-### 0) Prepare credentials (choose 1 of 4 auth paths)
+### 0) Choose 1 of 4 auth paths
 
 Before running scripts on EC2, prepare:
 - `TELEGRAM_BOT_TOKEN` (always required)
-- credentials for one of these paths:
+- credentials for exactly one of these paths:
 
 | Path | Coding agent auth | OpenClaw runtime auth | You need |
 |---|---|---|---|
@@ -64,9 +63,15 @@ Before running scripts on EC2, prepare:
 | 3. OpenAI OAuth subscription | Codex subscription login | OpenAI Codex OAuth | OpenAI subscription access |
 | 4. Anthropic OAuth subscription | Claude `setup-token` | Anthropic `setup-token` | Anthropic subscription access |
 
+Pick one path and follow it end-to-end:
+- Path 1: use OpenAI API key for both the coding agent and OpenClaw runtime.
+- Path 2: use Anthropic API key for both the coding agent and OpenClaw runtime.
+- Path 3: use your ChatGPT subscription for both Codex CLI and OpenClaw runtime OAuth.
+- Path 4: use your Anthropic subscription for both Claude Code and OpenClaw runtime via `setup-token`.
+
 Notes:
 - Path 4 is terminal-friendly and headless-friendly: script uses `claude setup-token` (no browser callback server required on EC2).
-- Script `01` reuses Claude setup-token between code-agent auth and runtime auth when possible.
+- Script `01` first asks which coding agent you want (`Codex` or `Claude Code`), then asks how that coding agent should authenticate, then asks which provider OpenClaw runtime should use.
 
 #### 0.1) Create OpenAI API key (if you choose OpenAI API key flow)
 
@@ -99,29 +104,28 @@ Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-ag
 
 ### 1) Bootstrap dependencies and clone repo
 
-Stable release (`main`):
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/no-name-labs/cto/main/scripts/00_bootstrap_dependencies.sh | bash
-```
-
-Dev branch (`codex/develop-v1-fixes`) for testing latest changes:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/no-name-labs/cto/codex/develop-v1-fixes/scripts/00_bootstrap_dependencies.sh | CTO_REPO_BRANCH=codex/develop-v1-fixes bash
 ```
 
 Script `00` will:
 - install base dependencies
 - clean stale NodeSource apt entries (if present)
-- clone this repo into `~/cto`
-- try to switch you into `~/cto`
+- clone this repo into `~/cto-agent`
+- try to switch you into `~/cto-agent`
 - print color-highlighted next steps
 
 If shell handoff is not available (common with `curl | bash`), run the command below and continue:
 
 ```bash
-cd ~/cto
+cd ~/cto-agent
+```
+
+If you are validating a non-`main` branch or a different fork, override the bootstrap source explicitly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/scripts/00_bootstrap_dependencies.sh | \
+  CTO_REPO_URL=https://github.com/<owner>/<repo>.git CTO_REPO_BRANCH=<ref> bash
 ```
 
 <img src="docs/images/deploy-console/01-bootstrap-console.png" alt="Bootstrap dependencies and clone repo console output" width="960">
@@ -136,7 +140,7 @@ What Script `01` asks from you:
 - coding CLI selection (`Codex` or `Claude Code`)
 - coding CLI auth method (`subscription` or `api key`)
 - runtime provider (`OpenAI` or `Anthropic`)
-- runtime auth method (provider-specific)
+- runtime auth method for that provider
 - API key prompts only when API-key mode is selected
 
 What Script `01` does:
@@ -145,11 +149,31 @@ What Script `01` does:
 - runs selected coding CLI healthcheck with retries
 - writes runtime files under `~/.openclaw`
 - configures runtime auth profile for selected provider
-- reuses existing `OPENCLAW_GATEWAY_TOKEN` if present, otherwise generates one
+- reuses existing `OPENCLAW_GATEWAY_TOKEN` if present, otherwise generates one automatically
 
 Auth notes:
-- Claude subscription flow starts with browser login.
-- If browser login does not complete in time, Script `01` falls back to `setup-token` prompt.
+- OpenAI subscription path:
+  - Choose `OpenAI Codex CLI`.
+  - Choose `ChatGPT Plus/Pro login`.
+  - Open the printed device-login URL in the browser on your host machine, sign in, press `Continue`, and enter the one-time code shown in the terminal.
+  - Script `01` then validates Codex automatically and runs the coding-agent healthcheck for you.
+  - For the runtime, choose `OpenAI` and then `ChatGPT/Codex OAuth`.
+  - OpenClaw prints a runtime OAuth URL. Open it in your local browser, sign in, and press `Continue`.
+  - The browser may then land on a `localhost` page that says `This site can't be reached`. That is expected on a remote host, VPS, or container.
+  - Copy the full browser URL and paste it back into the terminal when OpenClaw asks for the redirect URL.
+- Claude subscription path:
+  - Choose `Anthropic Claude Code CLI`.
+  - Script `01` walks you through the `claude setup-token` flow step by step.
+  - When the terminal prints the generated `sk-ant-oat...` token, paste it when prompted.
+  - If you also choose the Anthropic runtime token flow, you can reuse that token there.
+- API key paths:
+  - Script `01` asks only for the key required by the path you selected.
+  - If both the coding agent and the OpenClaw runtime use the same provider API-key path, enter that key once and Script `01` reuses it automatically.
+
+Gateway token notes:
+- Script `01` manages the gateway token automatically.
+- If a gateway token already exists, it is reused.
+- If not, a new one is generated and printed at the end of install.
 
 If this step looks stuck for more than 5 minutes during Node.js setup:
 - press `ENTER` once in the same terminal.
@@ -157,13 +181,35 @@ If this step looks stuck for more than 5 minutes during Node.js setup:
 
 <img src="docs/images/deploy-console/02-install-console.png" alt="OpenClaw and coding CLI installation console output" width="960">
 
-<img src="docs/images/deploy-console/02a-code-agent-selection.svg" alt="Code agent selection menu placeholder" width="960">
+Complete Codex walkthrough for the subscription path:
 
-<img src="docs/images/deploy-console/02b-runtime-provider-selection.svg" alt="Runtime provider selection menu placeholder" width="960">
+1. Select `OpenAI Codex CLI` as the coding agent.
 
-<img src="docs/images/deploy-console/02c-auth-method-selection.svg" alt="Auth method selection menu placeholder" width="960">
+<img src="docs/images/deploy-console/02a-code-agent-selection.png" alt="Code agent selection menu" width="960">
 
-<img src="docs/images/deploy-console/02d-claude-setup-token-fallback.svg" alt="Claude setup-token fallback placeholder" width="960">
+2. Select `ChatGPT Plus/Pro login`.
+   If you choose the OpenAI API-key path instead, paste the key once here. If the OpenClaw runtime also uses the OpenAI API-key path, Script `01` reuses that same key automatically.
+
+<img src="docs/images/deploy-console/02b-codex-auth-selection.png" alt="Codex authentication method selection menu" width="960">
+
+3. Script `01` installs Codex CLI and prints a device-login URL plus a one-time code.
+   Open that URL in the browser on your host machine, sign in, press `Continue`, enter the one-time code, and return to the terminal.
+   Script `01` then validates Codex automatically and runs the code-agent healthcheck for you.
+
+<img src="docs/images/deploy-console/02c-codex-device-login.png" alt="Codex device-login instructions in terminal" width="960">
+
+4. For the OpenClaw runtime, select `OpenAI` as the runtime provider.
+   The runtime auth choice stays on the same provider family, so for this walkthrough you continue with `ChatGPT/Codex OAuth`.
+
+<img src="docs/images/deploy-console/02d-runtime-provider-selection.png" alt="OpenClaw runtime provider selection menu" width="960">
+
+5. OpenClaw prints a runtime OAuth URL.
+   Open it in your local browser, sign in, and press `Continue`.
+   On remote hosts, VPS machines, and containers the browser will usually end on a `localhost` page that says `This site can't be reached`.
+   That is expected. Copy the full browser URL and paste it back into the terminal when OpenClaw asks for the redirect URL.
+   The URLs are intentionally redacted in the screenshot below.
+
+<img src="docs/images/deploy-console/02e-openai-runtime-callback-redacted.png" alt="OpenClaw runtime OAuth callback step with URLs redacted" width="960">
 
 ### 3) Connect Telegram and approve pairing
 
@@ -173,9 +219,9 @@ If this step looks stuck for more than 5 minutes during Node.js setup:
 
 What Script `02` asks from you:
 - `TELEGRAM_BOT_TOKEN`
-- preferred binding mode for Script `03`:
-  - group topic (recommended), or
-  - direct chat
+- where CTO should be bound:
+  - group topic (recommended if you are building/testing agents), or
+  - the same direct chat with your bot (fine for local experiments and quick play)
 
 What Script `02` does:
 - enables Telegram plugin
@@ -185,17 +231,30 @@ What Script `02` does:
 - auto-approves pairing code
 - stores preferred binding parameters for Script `03`
 
+Topic binding notes:
+- If you choose topic mode, just copy the Telegram topic link and paste it into the terminal.
+- Script `02` resolves the group/topic IDs for you and saves them for Script `03`.
+- This is the recommended mode for serious CTO work because the CTO can later bind created agents into other topics from the same environment.
+
 When the script pauses for pairing:
 1. Open direct chat with your Telegram bot.
 2. If this is the first time, press `Start` in Telegram.
 3. Send any message to the bot.
 4. Wait for the `pairing required` reply.
 5. Return to the terminal and press `ENTER`.
-6. When pairing is approved, copy the Telegram user ID printed in the console.
+6. Script `02` saves the approved Telegram identity and preferred CTO binding for Script `03`.
 
-<img src="docs/images/deploy-console/03-pairing-console.png" alt="Telegram pairing console output" width="960">
+The first Script `02` screen covers three things in one flow:
+- paste the Telegram bot token,
+- trigger pairing from direct chat with the bot,
+- choose where CTO should be bound after pairing completes.
 
-<img src="docs/images/deploy-console/03a-binding-mode-selection.svg" alt="Binding mode selection placeholder" width="960">
+<img src="docs/images/deploy-console/03-pairing-console-updated.png" alt="Telegram pairing, bot token input, and CTO binding choice" width="960">
+
+If you choose `Group topic (recommended)`, Script `02` immediately prints a short guide and asks for the Telegram topic link.
+You just copy the topic URL from Telegram and paste it into the terminal. Script `02` resolves the group/topic IDs and stores that binding for Script `03`.
+
+<img src="docs/images/deploy-console/03a-topic-binding-console.png" alt="Telegram topic binding flow and saved topic link" width="960">
 
 ### 4) Deploy CTO agent (uses saved binding mode)
 
@@ -203,11 +262,24 @@ When the script pauses for pairing:
 ./scripts/03_deploy_cto_agent.sh
 ```
 
-Script `03` deploys `cto-factory` and applies the binding preference saved by Script `02`.
-By default it uses the preferred binding mode saved by Script `02` (topic or direct).
-If direct mode is selected and your paired user ID is available, Script `03` reuses it automatically.
+Script `03` does not ask for new manual input in the normal flow.
+It deploys `cto-factory` using the state already collected by Scripts `01` and `02`, then applies the saved Telegram binding automatically.
 
-<img src="docs/images/deploy-console/04-deploy-console.png" alt="CTO agent deployment console output" width="960">
+By default it reuses:
+- the local branch if `CTO_REPO_BRANCH` is not set,
+- the preferred binding mode saved by Script `02`,
+- the saved Telegram topic link or direct-chat target,
+- the resolved provider allowlist from the runtime you already selected,
+- the remembered coding agent and its memory marker.
+
+So once Script `02` has completed successfully, Script `03` is usually just: run it, wait for the deploy, and verify the final `Bound target`.
+
+Success signals in Script `03`:
+- `Remembered code agent: ...`
+- `CTO remember marker validated: ...`
+- `Bound target: ...`
+
+<img src="docs/images/deploy-console/04-deploy-console-updated.png" alt="CTO agent deployment using saved branch and Telegram binding" width="960">
 
 ## Verify Deployment
 
@@ -294,26 +366,12 @@ What this example demonstrates:
 - A real smoke test matters more than a green unit test when Telegram delivery is part of the workflow.
 - You can iterate on the same agent safely by tightening prompts and forcing another test cycle.
 
-## Advanced: Rebind CTO To Group Topic
-
-Default flow uses direct chat only.
-
-For advanced users, to route CTO into a Telegram group topic after Script `03`:
-
-```bash
-./scripts/04_rebind_cto_to_topic.sh
-```
-
-You can pass either:
-- `BIND_TELEGRAM_LINK="https://t.me/c/<group>/<topic>"`
-- or explicit `BIND_GROUP_ID` + `BIND_TOPIC_ID`
-
 ## Update CTO Agent (Existing Install)
 
 When new CTO changes are released, run:
 
 ```bash
-cd ~/cto
+cd ~/cto-agent
 ./scripts/05_update_cto_agent.sh
 ```
 
@@ -356,7 +414,7 @@ To remove OpenClaw/CTO stack from the host:
 ```
 
 Options:
-- `REMOVE_REPO=true` to also delete `~/cto` (and legacy `~/cto-agent` if present)
+- `REMOVE_REPO=true` to also delete `~/cto-agent`
 - `WIPE_NODE_STACK=true` (default) to remove Node/OpenClaw/Codex binaries
 
 ## Security Notes
