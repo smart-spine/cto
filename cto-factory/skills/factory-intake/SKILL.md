@@ -69,6 +69,7 @@ Minimum extraction rules:
      - no project/config mutation,
      - no apply/restart/deploy request.
    - when `MICRO_SCRATCH_FASTPATH=YES`:
+     - treat it as an intake shortcut only, never as a delegation bypass,
      - skip intake survey/sign-off options,
      - do not ask A/B/C menus by default,
      - proceed with a single concise plan and execute via remembered code agent.

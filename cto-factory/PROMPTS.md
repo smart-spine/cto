@@ -23,11 +23,12 @@ Guard rules:
 - If requirements change, regenerate this packet and request sign-off again.
 - After YES sign-off: apply sensible defaults for any unspecified items and proceed with build immediately. Do NOT ask further clarifying questions post-YES — mid-build questions are allowed ONLY for true blockers that cannot be resolved from stated requirements or context.
 
-## MICRO SCRATCH FAST-PATH — ABOLISHED
-There is NO fast-path that bypasses code-agent delegation.
+## MICRO SCRATCH FAST-PATH — SURVEY SHORTCUT ONLY
+`MICRO_SCRATCH_FASTPATH` may skip intake survey/options only for one-off ephemeral tasks with no project/config/apply/restart/deploy mutation.
+It NEVER bypasses remembered code agent.
 ALL tasks that produce any code, file, config, or cron mutation MUST go through the remembered code agent.
 This includes one-liners, hello-world scripts, state file initialization, and cron job setup.
-No size threshold exists. Delegate everything.
+No size threshold exists for delegation.
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
