@@ -160,13 +160,15 @@ rewrite_hardcoded_paths() {
   log_info "Rewriting hardcoded local paths in copied files."
   python3 - "${target_workspace}" "${OPENCLAW_HOME}" <<'PY'
 import pathlib
+import re
 import sys
 
 root = pathlib.Path(sys.argv[1])
 openclaw_home = sys.argv[2]
-needles = [
-    "/Users/uladzislaupraskou/.openclaw",
-    "/home/ubuntu/.openclaw",
+patterns = [
+    re.compile(r"/Users/[^/\s]+/\.openclaw"),
+    re.compile(r"/home/[^/\s]+/\.openclaw"),
+    re.compile(r"/root/\.openclaw"),
 ]
 extensions = {".md", ".sh", ".py", ".txt", ".json", ".yaml", ".yml", ".toml"}
 updated = 0
@@ -181,9 +183,8 @@ for path in root.rglob("*"):
     except Exception:
         continue
     updated_text = text
-    for needle in needles:
-        if needle in updated_text:
-            updated_text = updated_text.replace(needle, openclaw_home)
+    for pattern in patterns:
+        updated_text = pattern.sub(openclaw_home, updated_text)
     if updated_text != text:
         path.write_text(updated_text, encoding="utf-8")
         updated += 1
