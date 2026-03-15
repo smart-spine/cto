@@ -29,6 +29,7 @@ FORCE_MODEL_UPDATE="${FORCE_MODEL_UPDATE:-false}"
 RESTART_GATEWAY="${RESTART_GATEWAY:-true}"
 SKIP_CTO_HEALTH_SMOKE="${SKIP_CTO_HEALTH_SMOKE:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
+MODEL_PROVIDERS_ALLOWLIST="${MODEL_PROVIDERS_ALLOWLIST:-}"
 
 BACKUP_DIR=""
 
@@ -193,9 +194,43 @@ print(updated)
 PY
 }
 
+resolve_model_provider_allowlist() {
+  if [[ -n "${MODEL_PROVIDERS_ALLOWLIST}" ]]; then
+    return 0
+  fi
+
+  local runtime_provider_id="${OPENCLAW_RUNTIME_PROVIDER_ID:-}"
+  local runtime_provider="${OPENCLAW_RUNTIME_PROVIDER:-}"
+
+  if [[ -z "${runtime_provider_id}" || -z "${runtime_provider}" ]]; then
+    local env_file="${OPENCLAW_HOME}/.env"
+    if [[ -f "${env_file}" ]]; then
+      runtime_provider_id="${runtime_provider_id:-$(grep -E '^OPENCLAW_RUNTIME_PROVIDER_ID=' "${env_file}" | tail -n1 | cut -d= -f2- || true)}"
+      runtime_provider="${runtime_provider:-$(grep -E '^OPENCLAW_RUNTIME_PROVIDER=' "${env_file}" | tail -n1 | cut -d= -f2- || true)}"
+    fi
+  fi
+
+  case "${runtime_provider_id:-${runtime_provider}}" in
+    anthropic)
+      MODEL_PROVIDERS_ALLOWLIST="anthropic"
+      ;;
+    openai-codex)
+      MODEL_PROVIDERS_ALLOWLIST="openai-codex"
+      ;;
+    openai|"")
+      MODEL_PROVIDERS_ALLOWLIST="openai"
+      ;;
+    *)
+      MODEL_PROVIDERS_ALLOWLIST="${runtime_provider_id:-${runtime_provider}}"
+      ;;
+  esac
+
+  log_info "Resolved MODEL_PROVIDERS_ALLOWLIST=${MODEL_PROVIDERS_ALLOWLIST}."
+}
+
 upsert_cto_agent_config() {
   backup_file "${OPENCLAW_CONFIG_PATH}"
-  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" <<'PY'
+  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" "${MODEL_PROVIDERS_ALLOWLIST}" <<'PY'
 import json
 import pathlib
 import sys
@@ -205,6 +240,7 @@ openclaw_home = pathlib.Path(sys.argv[2])
 cto_model = sys.argv[3]
 force_model_update = (sys.argv[4].strip().lower() == "true")
 agent_timeout_seconds = int(sys.argv[5])
+providers_arg = sys.argv[6] if len(sys.argv) > 6 else ""
 
 data = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -236,17 +272,23 @@ def pick_first(candidates, allowed):
     return ""
 
 
-auth = data.get("auth") or {}
-auth_order = auth.get("order") or {}
-provider_mode = "openai"
-if isinstance(auth_order, dict):
-    keys = [k for k in auth_order.keys() if isinstance(k, str)]
-    if keys == ["anthropic"]:
-        provider_mode = "anthropic"
+provider_allowlist = [p.strip() for p in providers_arg.split(",") if p.strip()]
+if provider_allowlist == ["anthropic"]:
+    provider_mode = "anthropic"
+elif provider_allowlist == ["openai-codex"]:
+    provider_mode = "openai-codex"
+else:
+    provider_mode = "openai"
 
 defaults_models = defaults.get("models") or {}
 allowed_models = [m for m in defaults_models.keys() if isinstance(m, str)] if isinstance(defaults_models, dict) else []
 allowed_set = set(allowed_models)
+
+def matches_provider_prefix(model, prefixes):
+    if not model:
+        return False
+    return any(model.startswith(p + "/") for p in prefixes)
+
 
 if provider_mode == "anthropic":
     preferred_primary = [
@@ -274,6 +316,26 @@ if provider_mode == "anthropic":
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-haiku-4-5-20251001",
     ]
+elif provider_mode == "openai-codex":
+    preferred_primary = [
+        cto_model,
+        "openai-codex/gpt-5.3-codex",
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+    ]
+    preferred_fallbacks = [
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+        "openai/gpt-4.1",
+    ]
+    preferred_heartbeat = [
+        "openai/gpt-5-nano",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.2",
+    ]
 else:
     preferred_primary = [
         cto_model,
@@ -299,13 +361,30 @@ preferred_primary = uniq(preferred_primary)
 preferred_fallbacks = uniq(preferred_fallbacks)
 preferred_heartbeat = uniq(preferred_heartbeat)
 
+if provider_mode == "anthropic":
+    required_prefixes = ["anthropic"]
+elif provider_mode == "openai-codex":
+    required_prefixes = ["openai-codex", "openai"]
+else:
+    required_prefixes = ["openai"]
+
+if cto_model and not matches_provider_prefix(cto_model, required_prefixes):
+    cto_model = ""
+
 selected_primary = pick_first(preferred_primary, set())
 if not selected_primary:
-    selected_primary = cto_model or ("anthropic/claude-opus-4-5" if provider_mode == "anthropic" else "openai/gpt-5.3-codex")
+    if provider_mode == "anthropic":
+        selected_primary = cto_model or "anthropic/claude-opus-4-5"
+    elif provider_mode == "openai-codex":
+        selected_primary = cto_model or "openai-codex/gpt-5.3-codex"
+    else:
+        selected_primary = cto_model or "openai/gpt-5.3-codex"
 
 selected_fallbacks = []
 for m in preferred_fallbacks:
     if m == selected_primary:
+        continue
+    if not matches_provider_prefix(m, required_prefixes):
         continue
     selected_fallbacks.append(m)
 selected_fallbacks = uniq(selected_fallbacks)[:3]
@@ -316,6 +395,8 @@ if len(selected_fallbacks) < 3 and allowed_models:
             continue
         if m in selected_fallbacks:
             continue
+        if not matches_provider_prefix(m, required_prefixes):
+            continue
         selected_fallbacks.append(m)
         if len(selected_fallbacks) >= 3:
             break
@@ -323,6 +404,8 @@ if len(selected_fallbacks) < 3 and allowed_models:
 
 heartbeat_model = pick_first(preferred_heartbeat, set())
 if not heartbeat_model:
+    heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
+if not matches_provider_prefix(heartbeat_model, required_prefixes):
     heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
 
 model_payload = {"primary": selected_primary}
@@ -452,6 +535,7 @@ main() {
 
   sync_workspace_files
   rewrite_hardcoded_paths
+  resolve_model_provider_allowlist
   upsert_cto_agent_config
   validate_config
   restart_gateway_if_needed

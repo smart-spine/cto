@@ -435,13 +435,22 @@ if provider_mode == "anthropic":
 elif provider_mode == "openai-codex":
     preferred_primary = [
         cto_model,
+        "openai-codex/gpt-5.3-codex",
         "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
     ]
     preferred_fallbacks = [
         "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+        "openai/gpt-4.1",
     ]
     preferred_heartbeat = [
-        "openai-codex/gpt-5.4",
+        "openai/gpt-5-nano",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.2",
     ]
 else:
     preferred_primary = [
@@ -471,7 +480,7 @@ preferred_heartbeat = uniq(preferred_heartbeat)
 if provider_mode == "anthropic":
     required_prefixes = ["anthropic"]
 elif provider_mode == "openai-codex":
-    required_prefixes = ["openai-codex"]
+    required_prefixes = ["openai-codex", "openai"]
 else:
     required_prefixes = ["openai"]
 
@@ -483,7 +492,7 @@ if not selected_primary:
     if provider_mode == "anthropic":
         selected_primary = cto_model or "anthropic/claude-opus-4-5"
     elif provider_mode == "openai-codex":
-        selected_primary = cto_model or "openai-codex/gpt-5.4"
+        selected_primary = cto_model or "openai-codex/gpt-5.3-codex"
     else:
         selected_primary = cto_model or "openai/gpt-5.3-codex"
 
