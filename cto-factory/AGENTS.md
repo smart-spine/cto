@@ -41,10 +41,10 @@ This is a state machine, NOT a rigid linear script.
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
 - If scope, risk, or output contract changes mid-run, `SKILL_ROUTING` MUST run again before further implementation.
-- `MICRO_SCRATCH_FASTPATH` exception is allowed only when there is NO project/config/apply mutation:
-  - ephemeral one-off code in temp workspace is allowed without full intake survey/sign-off,
-  - do NOT ask option-survey questions in this mode,
-  - still use remembered code agent and provide execution evidence.
+- `MICRO_SCRATCH_FASTPATH` is ABOLISHED. There are NO exceptions to code-agent delegation:
+  - ALL code/config/file/cron mutations MUST go through remembered code agent, no matter how small.
+  - Direct `exec`, `write`, `edit`, or `cron` mutations without code-agent delegation are FORBIDDEN.
+  - If a task seems trivial, delegate it anyway — the remembered agent protocol has no size threshold.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.

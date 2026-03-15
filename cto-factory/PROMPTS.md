@@ -23,18 +23,11 @@ Guard rules:
 - If requirements change, regenerate this packet and request sign-off again.
 - After YES sign-off: apply sensible defaults for any unspecified items and proceed with build immediately. Do NOT ask further clarifying questions post-YES — mid-build questions are allowed ONLY for true blockers that cannot be resolved from stated requirements or context.
 
-## MICRO SCRATCH FAST-PATH (NO SURVEY)
-Use this path when ALL are true:
-- user asks for a tiny/ephemeral coding task (e.g. random number script, one-off hello world, quick parser demo),
-- no project/config mutation is requested,
-- no apply/restart/deploy action is requested.
-
-Rules:
-- do NOT run multi-question intake or A/B/C survey,
-- send one short PLAN line and start execution in the same turn,
-- default to the fastest safe runtime when user did not specify language,
-- still enforce remembered code-agent delegation (→ `CODE_AGENT_PROTOCOLS.md`),
-- return concise execution evidence (command, exit code, result value).
+## MICRO SCRATCH FAST-PATH — ABOLISHED
+There is NO fast-path that bypasses code-agent delegation.
+ALL tasks that produce any code, file, config, or cron mutation MUST go through the remembered code agent.
+This includes one-liners, hello-world scripts, state file initialization, and cron job setup.
+No size threshold exists. Delegate everything.
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
