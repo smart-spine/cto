@@ -1380,6 +1380,9 @@ main() {
   if [[ -n "${OPENAI_API_KEY}" ]]; then
     upsert_env_var "${OPENCLAW_HOME}/.env" "OPENAI_API_KEY" "${OPENAI_API_KEY}"
   fi
+  if [[ -n "${OPENAI_BASE_URL}" ]]; then
+    upsert_env_var "${OPENCLAW_HOME}/.env" "OPENAI_BASE_URL" "${OPENAI_BASE_URL}"
+  fi
   if [[ -n "${ANTHROPIC_API_KEY}" ]]; then
     upsert_env_var "${OPENCLAW_HOME}/.env" "ANTHROPIC_API_KEY" "${ANTHROPIC_API_KEY}"
   fi
