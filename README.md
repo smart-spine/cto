@@ -1,8 +1,10 @@
 # CTO Bot Deployment (OpenClaw + Codex/Claude Code)
 
-This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`).
+The core premise in one sentence: taking the CTO concept from theory to reality by deploying the automated state machine on your own server.
 
-What CTO bot is for:
+This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`). The main path in this guide is **OpenAI OAuth with a ChatGPT Plus/Pro subscription**, because it is the fastest route for most people. Other supported authentication paths are still available and listed below.
+
+What the CTO bot is for:
 - safer agent creation workflow
 - controlled rollout with backup and rollback
 - config validation before apply
@@ -11,12 +13,12 @@ What CTO bot is for:
 This deployment package supports:
 - OpenAI and Anthropic runtime providers
 - Codex CLI and Claude Code CLI as coding agents
-- API key and subscription login flows (provider-dependent)
+- API key and subscription login flows
+- direct-chat binding and Telegram group topic binding
 
 ## Open Source Governance
 
 Before contributing, read:
-
 - [LICENSE](LICENSE) (Apache-2.0)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [SECURITY.md](SECURITY.md)
@@ -24,22 +26,29 @@ Before contributing, read:
 - [TRADEMARKS.md](TRADEMARKS.md)
 
 Contribution model:
+- DCO-based sign-off is required (`git commit -s`)
+- pull requests are the only merge path to protected branches
 
-- DCO-based sign-off is required (`git commit -s`).
-- Pull requests are the only merge path to protected branches.
+## Quick V1 Note
+
+This is a production-used V1, not a polished V2.
+
+Known rough edge:
+- sometimes the CTO may go silent in Telegram during a long run; if that happens, send a short ping message in the same chat/topic and it should resume reporting
+
+If you hit other odd behavior, open an issue or post it in the community feed.
 
 ## Prerequisites
 
 You need:
-- Ubuntu EC2 host
+- Ubuntu 22.04 LTS or Ubuntu 24.04 LTS
 - SSH access as user `ubuntu` with `sudo`
-- Telegram bot token (from BotFather)
+- a clean or controlled EC2/VPS host
+- a Telegram bot token from BotFather
+- credentials for **one** supported auth path
 
-CTO supports exactly 4 authentication paths:
-1. **OpenAI API key** (`OPENAI_API_KEY`)
-2. **Anthropic API key** (`ANTHROPIC_API_KEY`)
-3. **OpenAI OAuth subscription** (Codex login flow)
-4. **Anthropic OAuth subscription** (`claude setup-token` flow)
+Tested heavily on:
+- OpenClaw `2026.3.8`
 
 Out of scope in this guide:
 - EC2 provisioning
@@ -48,80 +57,57 @@ Out of scope in this guide:
 If needed, use AWS docs:
 - <https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html>
 
-## Deploy On A Clean EC2
+## Choose 1 of 4 Authentication Paths
 
-### 0) Choose 1 of 4 auth paths
+CTO supports exactly 4 auth paths. Pick one and follow it end-to-end.
 
-Before running scripts on EC2, prepare:
-- `TELEGRAM_BOT_TOKEN` (always required)
-- credentials for exactly one of these paths:
-
-| Path | Coding agent auth | OpenClaw runtime auth | You need |
+| Path | Coding agent auth | OpenClaw runtime auth | Best for |
 |---|---|---|---|
-| 1. OpenAI API key | Codex with API key | OpenAI with API key | `OPENAI_API_KEY` |
-| 2. Anthropic API key | Claude Code with API key | Anthropic with API key | `ANTHROPIC_API_KEY` |
-| 3. OpenAI OAuth subscription | Codex subscription login | OpenAI Codex OAuth | OpenAI subscription access |
-| 4. Anthropic OAuth subscription | Claude `setup-token` | Anthropic `setup-token` | Anthropic subscription access |
+| 1. OpenAI OAuth subscription | Codex login | OpenAI Codex OAuth | ChatGPT Plus/Pro users |
+| 2. Anthropic OAuth subscription | Claude `setup-token` | Anthropic `setup-token` | Claude subscription users |
+| 3. OpenAI API key | Codex with API key | OpenAI with API key | pay-as-you-go OpenAI usage |
+| 4. Anthropic API key | Claude Code with API key | Anthropic with API key | pay-as-you-go Anthropic usage |
 
-Pick one path and follow it end-to-end:
-- Path 1: use OpenAI API key for both the coding agent and OpenClaw runtime.
-- Path 2: use Anthropic API key for both the coding agent and OpenClaw runtime.
-- Path 3: use your ChatGPT subscription for both Codex CLI and OpenClaw runtime OAuth.
-- Path 4: use your Anthropic subscription for both Claude Code and OpenClaw runtime via `setup-token`.
+What this README focuses on:
+- the **recommended path** is **Path 1: OpenAI OAuth subscription**
+- the scripts still support all 4 paths
+- if you choose an API-key path and both the coding agent and the runtime use the same provider, Script `01` reuses that key automatically
 
-Notes:
-- Path 4 is terminal-friendly and headless-friendly: script uses `claude setup-token` (no browser callback server required on EC2).
-- Script `01` first asks which coding agent you want (`Codex` or `Claude Code`), then asks how that coding agent should authenticate, then asks which provider OpenClaw runtime should use.
+## Deploy on a Clean Server
 
-#### 0.1) Create OpenAI API key (if you choose OpenAI API key flow)
+### 0) Create your Telegram bot token
 
-1. Open [OpenAI Platform](https://platform.openai.com/) and sign in.
-2. Enable billing (Pay-as-you-go) for API usage.
-3. Open [API Keys](https://platform.openai.com/api-keys) and create a new secret key.
-4. Copy it once and store it in your password manager.
+In Telegram:
+1. Open `@BotFather`
+2. Run `/newbot`
+3. Follow the naming steps
+4. Copy the bot token
 
-Notes:
-- The key usually starts with `sk-...`
-- You paste it into Script `01` only when API-key mode is selected.
-
-#### 0.2) Create Anthropic API key (if you choose Anthropic API key flow)
-
-1. Open [Anthropic Console](https://console.anthropic.com/) and sign in.
-2. Create API key in account settings.
-3. Copy and store it in your password manager.
-
-Notes:
-- The key usually starts with `sk-ant-...`
-- You paste it into Script `01` only when API-key mode is selected.
-
-#### 0.3) Create Telegram bot token
-
-In BotFather:
-- create a bot
-- copy bot token
-
-Optional reference guide: [OpenClaw Community Guide](https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
+Optional reference guide:
+- [OpenClaw Community Guide](https://www.skool.com/ai-agents-openclaw/classroom/2a105da6?md=4501a64424d045de97b98683c8181b8c)
 
 ### 1) Bootstrap dependencies and clone repo
+
+Connect to your server over SSH and run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/no-name-labs/cto/main/scripts/00_bootstrap_dependencies.sh | bash
 ```
 
-Script `00` will:
-- install base dependencies
-- clean stale NodeSource apt entries (if present)
-- clone this repo into `~/cto-agent`
-- try to switch you into `~/cto-agent`
-- print color-highlighted next steps
+What Script `00` does:
+- installs base OS dependencies
+- cleans stale NodeSource apt entries if needed
+- clones this repository into `~/cto-agent`
+- tries to switch you into `~/cto-agent`
+- prints the next steps
 
-If shell handoff is not available (common with `curl | bash`), run the command below and continue:
+If shell handoff is not available after `curl | bash`, run:
 
 ```bash
 cd ~/cto-agent
 ```
 
-If you are validating a non-`main` branch or a different fork, override the bootstrap source explicitly:
+If you are validating a different branch or a fork, override the bootstrap source explicitly:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/scripts/00_bootstrap_dependencies.sh | \
@@ -130,76 +116,56 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/scripts/00_boo
 
 <img src="docs/images/deploy-console/01-bootstrap-console.png" alt="Bootstrap dependencies and clone repo console output" width="960">
 
-### 2) Install OpenClaw + coding CLI (Codex or Claude Code)
+### 2) Install OpenClaw and your coding agent
+
+Run:
 
 ```bash
 ./scripts/01_install_openclaw.sh
 ```
 
-What Script `01` asks from you:
-- coding CLI selection (`Codex` or `Claude Code`)
-- coding CLI auth method (`subscription` or `api key`)
-- runtime provider (`OpenAI` or `Anthropic`)
-- runtime auth method for that provider
-- API key prompts only when API-key mode is selected
+Script `01` is the main installer wizard. It asks you:
+- which coding agent to use (`Codex` or `Claude Code`)
+- how that coding agent should authenticate
+- which provider OpenClaw runtime should use (`OpenAI` or `Anthropic`)
+- how the runtime should authenticate
 
-What Script `01` does:
-- installs Node.js, OpenClaw CLI, and selected coding CLI
-- authenticates selected coding CLI (subscription/API key)
-- runs selected coding CLI healthcheck with retries
+The **recommended path** is:
+- `OpenAI Codex CLI`
+- `ChatGPT Plus/Pro login`
+- runtime provider: `OpenAI`
+- runtime auth: `ChatGPT/Codex OAuth`
+
+It also:
+- installs Node.js, OpenClaw CLI, and the selected coding CLI
+- authenticates the selected coding CLI
+- validates the coding CLI with a healthcheck
 - writes runtime files under `~/.openclaw`
-- configures runtime auth profile for selected provider
-- reuses existing `OPENCLAW_GATEWAY_TOKEN` if present, otherwise generates one automatically
+- configures the OpenClaw runtime auth profile
+- reuses the existing gateway token if present, otherwise generates one automatically
 
-Auth notes:
-- OpenAI subscription path:
-  - Choose `OpenAI Codex CLI`.
-  - Choose `ChatGPT Plus/Pro login`.
-  - Open the printed device-login URL in the browser on your host machine, sign in, press `Continue`, and enter the one-time code shown in the terminal.
-  - Script `01` then validates Codex automatically and runs the coding-agent healthcheck for you.
-  - For the runtime, choose `OpenAI` and then `ChatGPT/Codex OAuth`.
-  - OpenClaw prints a runtime OAuth URL. Open it in your local browser, sign in, and press `Continue`.
-  - The browser may then land on a `localhost` page that says `This site can't be reached`. That is expected on a remote host, VPS, or container.
-  - Copy the full browser URL and paste it back into the terminal when OpenClaw asks for the redirect URL.
-- Claude subscription path:
-  - Choose `Anthropic Claude Code CLI`.
-  - Script `01` walks you through the `claude setup-token` flow step by step.
-  - When the terminal prints the generated `sk-ant-oat...` token, paste it when prompted.
-  - If you also choose the Anthropic runtime token flow, you can reuse that token there.
-- API key paths:
-  - Script `01` asks only for the key required by the path you selected.
-  - If both the coding agent and the OpenClaw runtime use the same provider API-key path, enter that key once and Script `01` reuses it automatically.
+If this step appears stuck for more than 5 minutes during Node.js setup:
+- press `ENTER` once in the same terminal
+- some Ubuntu hosts pause on an interactive `needrestart` prompt
 
-Gateway token notes:
-- Script `01` manages the gateway token automatically.
-- If a gateway token already exists, it is reused.
-- If not, a new one is generated and printed at the end of install.
-
-If this step looks stuck for more than 5 minutes during Node.js setup:
-- press `ENTER` once in the same terminal.
-- some Ubuntu hosts show an interactive `needrestart` prompt (for example, `Pending kernel upgrade`) that pauses `apt` until you confirm.
-
-<img src="docs/images/deploy-console/02-install-console.png" alt="OpenClaw and coding CLI installation console output" width="960">
-
-Complete Codex walkthrough for the subscription path:
+#### Recommended walkthrough: OpenAI OAuth subscription
 
 1. Select `OpenAI Codex CLI` as the coding agent.
 
 <img src="docs/images/deploy-console/02a-code-agent-selection.png" alt="Code agent selection menu" width="960">
 
 2. Select `ChatGPT Plus/Pro login`.
-   If you choose the OpenAI API-key path instead, paste the key once here. If the OpenClaw runtime also uses the OpenAI API-key path, Script `01` reuses that same key automatically.
+   If you choose the OpenAI API-key path instead, paste the OpenAI key once here. If the OpenClaw runtime also uses the OpenAI API-key path, Script `01` reuses that same key automatically.
 
 <img src="docs/images/deploy-console/02b-codex-auth-selection.png" alt="Codex authentication method selection menu" width="960">
 
 3. Script `01` installs Codex CLI and prints a device-login URL plus a one-time code.
    Open that URL in the browser on your host machine, sign in, press `Continue`, enter the one-time code, and return to the terminal.
-   Script `01` then validates Codex automatically and runs the code-agent healthcheck for you.
+   Script `01` then validates Codex automatically and runs the coding-agent healthcheck.
 
 <img src="docs/images/deploy-console/02c-codex-device-login.png" alt="Codex device-login instructions in terminal" width="960">
 
-4. For the OpenClaw runtime, select `OpenAI` as the runtime provider.
-   The runtime auth choice stays on the same provider family, so for this walkthrough you continue with `ChatGPT/Codex OAuth`.
+4. For the OpenClaw runtime, select `OpenAI` as the runtime provider. Then continue with `ChatGPT/Codex OAuth` for the runtime auth.
 
 <img src="docs/images/deploy-console/02d-runtime-provider-selection.png" alt="OpenClaw runtime provider selection menu" width="960">
 
@@ -207,74 +173,78 @@ Complete Codex walkthrough for the subscription path:
    Open it in your local browser, sign in, and press `Continue`.
    On remote hosts, VPS machines, and containers the browser will usually end on a `localhost` page that says `This site can't be reached`.
    That is expected. Copy the full browser URL and paste it back into the terminal when OpenClaw asks for the redirect URL.
-   The URLs are intentionally redacted in the screenshot below.
 
 <img src="docs/images/deploy-console/02e-openai-runtime-callback-redacted.png" alt="OpenClaw runtime OAuth callback step with URLs redacted" width="960">
 
+#### Other supported auth paths
+
+The installer also supports:
+- **Anthropic OAuth subscription**: choose `Anthropic Claude Code CLI` and follow the `claude setup-token` flow; if you also choose Anthropic for the runtime, you can reuse that token there
+- **OpenAI API key**: paste `OPENAI_API_KEY` when prompted; if both coding agent and runtime use OpenAI API-key mode, Script `01` reuses it automatically
+- **Anthropic API key**: paste `ANTHROPIC_API_KEY` when prompted; if both coding agent and runtime use Anthropic API-key mode, Script `01` reuses it automatically
+
 ### 3) Connect Telegram and approve pairing
+
+Run:
 
 ```bash
 ./scripts/02_setup_telegram_pairing.sh
 ```
 
-What Script `02` asks from you:
+Script `02` asks for:
 - `TELEGRAM_BOT_TOKEN`
 - where CTO should be bound:
-  - group topic (recommended if you are building/testing agents), or
-  - the same direct chat with your bot (fine for local experiments and quick play)
+  - **Group topic (recommended)** if you are building agents seriously
+  - **Direct chat** if you only want a local playground or quick experiments
+
+Why topic binding is recommended:
+- it gives you a stable control room for your team
+- later the CTO can create and bind other agents into topics from the same environment
+- you only need to copy the Telegram topic link and paste it into the terminal
 
 What Script `02` does:
-- enables Telegram plugin
-- writes token into OpenClaw config
+- enables the Telegram plugin
+- writes the Telegram token into config
 - restarts gateway
-- waits for pairing trigger
-- auto-approves pairing code
-- stores preferred binding parameters for Script `03`
-
-Topic binding notes:
-- If you choose topic mode, just copy the Telegram topic link and paste it into the terminal.
-- Script `02` resolves the group/topic IDs for you and saves them for Script `03`.
-- This is the recommended mode for serious CTO work because the CTO can later bind created agents into other topics from the same environment.
+- waits for the pairing trigger
+- auto-approves pairing
+- stores the preferred CTO binding so Script `03` can reuse it automatically
 
 When the script pauses for pairing:
-1. Open direct chat with your Telegram bot.
-2. If this is the first time, press `Start` in Telegram.
-3. Send any message to the bot.
-4. Wait for the `pairing required` reply.
-5. Return to the terminal and press `ENTER`.
-6. Script `02` saves the approved Telegram identity and preferred CTO binding for Script `03`.
+1. Open a direct chat with your Telegram bot
+2. If this is the first time, press `Start`
+3. Send any message to the bot
+4. Wait for the `pairing required` reply
+5. Return to the terminal and press `ENTER`
 
 The first Script `02` screen covers three things in one flow:
-- paste the Telegram bot token,
-- trigger pairing from direct chat with the bot,
-- choose where CTO should be bound after pairing completes.
+- paste the Telegram bot token
+- trigger pairing from direct chat with the bot
+- choose where CTO should be bound after pairing completes
 
 <img src="docs/images/deploy-console/03-pairing-console-updated.png" alt="Telegram pairing, bot token input, and CTO binding choice" width="960">
 
-If you choose `Group topic (recommended)`, Script `02` immediately prints a short guide and asks for the Telegram topic link.
-You just copy the topic URL from Telegram and paste it into the terminal. Script `02` resolves the group/topic IDs and stores that binding for Script `03`.
+If you choose `Group topic (recommended)`, Script `02` prints a short guide and asks for the Telegram topic link.
+Just copy the topic URL from Telegram and paste it into the terminal. Script `02` resolves the group/topic IDs and saves that binding for Script `03`.
 
 <img src="docs/images/deploy-console/03a-topic-binding-console.png" alt="Telegram topic binding flow and saved topic link" width="960">
 
-### 4) Deploy CTO agent (uses saved binding mode)
+### 4) Deploy your CTO agent
+
+Run:
 
 ```bash
 ./scripts/03_deploy_cto_agent.sh
 ```
 
-Script `03` does not ask for new manual input in the normal flow.
-It deploys `cto-factory` using the state already collected by Scripts `01` and `02`, then applies the saved Telegram binding automatically.
+Script `03` normally does not ask for new input.
+It uses the state already collected by Scripts `01` and `02`, then:
+- syncs the `cto-factory` workspace
+- patches the agent config
+- validates the remembered coding agent
+- applies the saved Telegram binding automatically
 
-By default it reuses:
-- the local branch if `CTO_REPO_BRANCH` is not set,
-- the preferred binding mode saved by Script `02`,
-- the saved Telegram topic link or direct-chat target,
-- the resolved provider allowlist from the runtime you already selected,
-- the remembered coding agent and its memory marker.
-
-So once Script `02` has completed successfully, Script `03` is usually just: run it, wait for the deploy, and verify the final `Bound target`.
-
-Success signals in Script `03`:
+Success signals:
 - `Remembered code agent: ...`
 - `CTO remember marker validated: ...`
 - `Bound target: ...`
@@ -283,7 +253,7 @@ Success signals in Script `03`:
 
 ## Verify Deployment
 
-Run on server:
+Run on the server:
 
 ```bash
 openclaw --version
@@ -299,19 +269,23 @@ Local CTO smoke:
 openclaw agent --local --agent cto-factory --message "Reply with CTO_FACTORY_OK" --json
 ```
 
-## First Run Checklist
+## Your First Task
 
-1. Open direct chat with your bot.
-2. Send a simple test message.
-3. Verify CTO replies.
+Open your Telegram bot and send a simple test message.
 
-Prompt example for first real task:
+Prompt example:
 
 ```text
 Create a new Reddit monitoring agent for OpenClaw topics.
 It should monitor selected subreddits via RSS and post updates to Telegram.
 Start with your intake survey, collect missing decisions, then run your normal build pipeline and stop at READY_FOR_APPLY.
 ```
+
+What to expect:
+- CTO should stop and ask for missing requirements first
+- then it should delegate coding to the remembered code agent
+- then it should run tests and validation
+- then it should stop at `READY_FOR_APPLY` instead of blindly mutating production
 
 ## Example Workflow: CTO Builds and Fixes a Real Agent
 
@@ -360,11 +334,11 @@ The finished agent posts raw Reddit items first, then adds a concise summary for
 <img src="docs/images/example-workflow/07-live-output.png" alt="Live Telegram output from the Reddit agent" width="960">
 
 What this example demonstrates:
-- The CTO bot should ask questions before coding when requirements are incomplete.
-- Code changes should be routed through `codex`, not hand-written inline by the manager agent.
-- Every meaningful change should be backed by tests and `openclaw config validate --json`.
-- A real smoke test matters more than a green unit test when Telegram delivery is part of the workflow.
-- You can iterate on the same agent safely by tightening prompts and forcing another test cycle.
+- the CTO bot should ask questions before coding when requirements are incomplete
+- code changes should be routed through the remembered code agent, not hand-written inline by the manager agent
+- every meaningful change should be backed by tests and `openclaw config validate --json`
+- a real smoke test matters more than a green unit test when Telegram delivery is part of the workflow
+- you can iterate on the same agent safely by tightening prompts and forcing another test cycle
 
 ## Update CTO Agent (Existing Install)
 
@@ -383,14 +357,14 @@ What Script `05` does:
 - restarts gateway and runs CTO smoke check
 
 Useful options:
-- `UPDATE_REPO=false` (skip git pull, use local repo state)
-- `CTO_REPO_REF=<tag-or-branch>` (pin update source)
-- `SKIP_CTO_HEALTH_SMOKE=true` (skip local agent smoke)
-- `RESTART_GATEWAY=false` (update files/config without restart)
+- `UPDATE_REPO=false` to skip git pull and use local repo state
+- `CTO_REPO_REF=<tag-or-branch>` to pin the update source
+- `SKIP_CTO_HEALTH_SMOKE=true` to skip the local agent smoke
+- `RESTART_GATEWAY=false` to update files and config without restart
 
 ## BETA Notes (Existing OpenClaw Installation)
 
-> BETA: Scripts are designed to be additive, but this is not zero-risk for a busy multi-agent host.
+> BETA: the scripts are designed to be additive, but this is not zero-risk for a busy multi-agent host.
 
 Recommended before deployment:
 
@@ -419,38 +393,20 @@ Options:
 
 ## Security Notes
 
-- Never commit real API keys or Telegram tokens.
-- Keep secrets in `~/.openclaw/.env` with strict permissions.
-- Keep gateway token in a password manager.
+- do not commit `.env`, tokens, or auth profiles
+- review gateway-restart behavior before running on production traffic
+- prefer topic isolation for production-facing agents
 
-## Runtime User Model (Read This Carefully)
+## Runtime User Model
 
 Current behavior in this repo:
-- **OpenClaw runs as the same Linux user that runs the scripts** (typically `ubuntu` on EC2).
-- No dedicated `openclaw` OS user is created automatically.
+- OpenClaw runs as the same Linux user that runs the scripts, usually `ubuntu` on EC2
+- the default home is `~/.openclaw`, so runtime state, auth profiles, and logs stay under that user
+- gateway is configured for loopback + token auth by default
 
-### Evidence (from this repo)
+What that means operationally:
+- this is acceptable for a single-tenant dev VM or an internal admin box
+- the `ubuntu` account becomes part of your trust boundary
+- any compromise of that account exposes OpenClaw state and secrets under `~/.openclaw`
 
-- `scripts/01_install_openclaw.sh` sets:
-  - `OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"`
-  - this resolves to the current user home by default (for EC2, `/home/ubuntu/.openclaw`).
-- `scripts/lib/common.sh` starts gateway with `nohup openclaw gateway run ...` in the current user context.
-- `scripts/01_install_openclaw.sh` configures gateway with:
-  - `gateway.bind = "loopback"` (not public bind by default)
-  - `gateway.auth.mode = "token"` with `OPENCLAW_GATEWAY_TOKEN`
-- `scripts/lib/common.sh` writes `.env` with `chmod 600`.
-
-### Is this safe?
-
-For a **single-tenant dev VM** or controlled internal setup, this is generally acceptable because:
-- gateway is loopback-bound by default,
-- token auth is enabled,
-- secrets are kept in user-owned state files.
-
-### Risks you should explicitly accept
-
-- The `ubuntu` account becomes a larger trust boundary:
-  - compromise of that account exposes OpenClaw state and secrets under `$HOME/.openclaw`.
-- Process isolation is weaker than a hardened dedicated service account/container setup.
-- Any other workload running as `ubuntu` can potentially read or alter the same user-scoped files.
-- Operational mistakes in `ubuntu` shell context can affect OpenClaw runtime and config directly.
+If you need stronger isolation, use a hardened service account or container boundary on top of this deployment pack.
