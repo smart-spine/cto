@@ -1,6 +1,7 @@
 # Required deploy paths for cto-factory sync
 # One relative path per line, relative to cto-factory root
 AGENTS.md
+CODE_AGENT_PROTOCOLS.md
 HEARTBEAT.md
 IDENTITY.md
 PROMPTS.md
@@ -8,6 +9,7 @@ SKILL_ROUTING.md
 SOUL.md
 TOOLS.md
 USER.md
+scripts/cto_code_agent_memory.py
 scripts/codex_guarded_exec.py
 scripts/cto_agent_artifact_gate.py
 scripts/cto_apply_state.py

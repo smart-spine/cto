@@ -1,22 +1,22 @@
 ---
 name: factory-codex-plan-audit
-description: Enforce Codex plan/report coverage against intake requirements before READY.
+description: Enforce plan/report coverage (for remembered code agent) against intake requirements before READY.
 ---
 
-Use this skill for non-trivial Codex tasks:
+Use this skill for non-trivial code-agent tasks (`codex` or `claude`):
 - new agent creation,
 - multi-file behavior changes,
 - interactive UX changes,
 - tasks with 3+ explicit requirements.
 
 ## GOAL
-Prevent requirement drift by enforcing a strict Codex cycle:
+Prevent requirement drift by enforcing a strict cycle:
 - PLAN -> IMPLEMENT -> AUDIT -> (REWORK if needed).
 
 ## REQUIRED INPUTS
 - deterministic requirement checklist file (`R1`, `R2`, ...),
-- Codex plan output text,
-- Codex implementation output text.
+- code-agent plan output text,
+- code-agent implementation output text.
 
 ## REQUIRED TOOLING
 - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <req.json> --codex-output-file <plan.txt>`
@@ -27,14 +27,14 @@ Prevent requirement drift by enforcing a strict Codex cycle:
 2. EXEC report gate MUST pass before READY_FOR_APPLY.
 3. If either gate fails:
    - produce concrete missing requirement ids,
-   - send rework prompt to Codex,
+   - send rework prompt to remembered code agent,
    - rerun gate until pass or explicit BLOCKED.
-4. NEVER accept narrative-only Codex output for non-trivial tasks.
+4. NEVER accept narrative-only output for non-trivial tasks.
    - machine-checkable JSON markers are mandatory.
 
 ## MINIMUM ACCEPTANCE
-- every requirement id from intake appears in Codex plan,
-- every requirement id appears as `done` in Codex execution report,
+- every requirement id from intake appears in plan,
+- every requirement id appears as `done` in execution report,
 - tests listed in execution report include exit codes,
 - no unresolved mandatory gaps remain.
 

@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+BOOTSTRAP_TZ="${BOOTSTRAP_TZ:-America/New_York}"
+
 timestamp_utc() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
@@ -75,7 +77,8 @@ apt_retry() {
   local max_attempts=5
   local delay=5
   while (( attempt <= max_attempts )); do
-    if run_as_root apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=5 "$@"; then
+    if run_as_root env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true TZ="${BOOTSTRAP_TZ}" NEEDRESTART_MODE=a \
+      apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=5 "$@"; then
       return 0
     fi
     if (( attempt == max_attempts )); then
@@ -86,6 +89,22 @@ apt_retry() {
     attempt=$((attempt + 1))
   done
   die "apt-get failed after ${max_attempts} attempts: apt-get $*"
+}
+
+configure_bootstrap_timezone() {
+  [[ -n "${BOOTSTRAP_TZ}" ]] || return 0
+  if ! run_as_root test -f "/usr/share/zoneinfo/${BOOTSTRAP_TZ}"; then
+    log_warn "Timezone '${BOOTSTRAP_TZ}' is not available on this host; skipping timezone configuration."
+    return 0
+  fi
+
+  run_as_root ln -snf "/usr/share/zoneinfo/${BOOTSTRAP_TZ}" /etc/localtime
+  run_as_root bash -lc "printf '%s\n' '${BOOTSTRAP_TZ}' > /etc/timezone"
+  if command -v dpkg-reconfigure >/dev/null 2>&1; then
+    run_as_root env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true TZ="${BOOTSTRAP_TZ}" \
+      dpkg-reconfigure -f noninteractive tzdata >/dev/null 2>&1 || true
+  fi
+  log_info "Default timezone set to ${BOOTSTRAP_TZ}."
 }
 
 assert_supported_os() {
@@ -145,7 +164,7 @@ resolve_default_repo_dir() {
       fi
     fi
   fi
-  printf "%s/cto" "${base_home}"
+  printf "%s/cto-agent" "${base_home}"
 }
 
 resolve_repo_branch() {
@@ -174,6 +193,8 @@ clone_or_update_repo() {
 
   if [[ -d "${repo_dir}/.git" ]]; then
     log_info "Repository already exists: ${repo_dir}. Updating."
+    # Allow git operations when repo was copied with different ownership (e.g. docker cp).
+    git config --global --add safe.directory "${repo_dir}" 2>/dev/null || true
     git -C "${repo_dir}" fetch --all --prune
     git -C "${repo_dir}" checkout "${branch}"
     git -C "${repo_dir}" pull --ff-only origin "${branch}"
@@ -252,6 +273,7 @@ main() {
   apt_retry install -y -qq \
     ca-certificates curl git jq python3 python3-venv rsync sudo gnupg lsb-release \
     unzip xz-utils tar procps
+  configure_bootstrap_timezone
 
   log_info "Stage 2/4: Verifying required commands."
   require_cmd curl

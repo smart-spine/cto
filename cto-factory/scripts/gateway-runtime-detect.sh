@@ -81,7 +81,7 @@ payload = {
     "recommended_restart_command": (
         'OPENCLAW_ROOT="${OPENCLAW_ROOT:-$HOME/.openclaw}" '
         '&& nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" '
-        '--agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &'
+        '--agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" >/dev/null 2>&1 &'
     ),
     "status_excerpt": "\n".join(status_out.splitlines()[:20]),
     "probe_excerpt": "\n".join(probe_out.splitlines()[:20]),

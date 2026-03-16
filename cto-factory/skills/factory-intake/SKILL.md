@@ -3,7 +3,8 @@ name: factory-intake
 description: Parse user request into deterministic task intent and acceptance criteria.
 ---
 
-Use this skill at the beginning of every task.
+Use this skill for non-trivial tasks and all project/config mutation tasks.
+Do NOT use this skill for micro scratch tasks where there is no project/config/apply mutation.
 
 Minimum extraction rules:
 1. Read the user's message and identify the core intent (e.g., "create agent", "modify config", "fix bug", "add feature").
@@ -62,6 +63,16 @@ Minimum extraction rules:
    - if user asks for external cloud deployment (AWS/GCP/Azure) and no dedicated deployment tool is available in this workspace,
    - do not claim execution readiness,
    - return a clear capability limit and offer local alternatives (config/script/package only).
+11. MICRO_SCRATCH_FASTPATH classifier:
+   - set `MICRO_SCRATCH_FASTPATH=YES` only when:
+     - task is ephemeral/one-off,
+     - no project/config mutation,
+     - no apply/restart/deploy request.
+   - when `MICRO_SCRATCH_FASTPATH=YES`:
+     - treat it as an intake shortcut only, never as a delegation bypass,
+     - skip intake survey/sign-off options,
+     - do not ask A/B/C menus by default,
+     - proceed with a single concise plan and execute via remembered code agent.
 
 Output:
 - normalized objective,
@@ -74,3 +85,4 @@ Output:
 - intake sign-off status (`SIGNOFF_STATUS: PENDING|APPROVED`),
 - apply intent (`APPLY_PHASE`).
 - keepalive requirement marker (`KEEPALIVE_PLAN: REQUIRED|OPTIONAL`).
+- micro fast-path marker (`MICRO_SCRATCH_FASTPATH: YES|NO`).

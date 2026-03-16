@@ -406,9 +406,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     heartbeat_index = 0
     with log_path(args.task_id).open("a", encoding="utf-8") as logf:
         logf.write(f"[{now_iso()}] START cmd={args.command} cwd={args.cwd}\n")
+        child_env = os.environ.copy()
+        # Keep delegated shells resilient under `set -u` templates.
+        child_env.setdefault("CTO_SESSION_ID", "")
+        child_env.setdefault("OPENCLAW_SESSION_ID", "")
+        child_env.setdefault("OPENCLAW_ROOT", str(OPENCLAW_ROOT))
         proc = subprocess.Popen(
-            ["/bin/zsh", "-lc", args.command],
+            ["/usr/bin/env", "bash", "-lc", args.command],
             cwd=args.cwd,
+            env=child_env,
             text=True,
             stdout=logf,
             stderr=logf,

@@ -48,7 +48,7 @@ Restart-specific guard:
   - `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
   - extract `restart_tool` from JSON and use it as the dispatcher path.
 - Preferred canonical command:
-  - `OPENCLAW_ROOT="$OPENCLAW_ROOT" nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &`
+  - `OPENCLAW_ROOT="$OPENCLAW_ROOT" nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}" >/dev/null 2>&1 &`
 - If runtime-detect script is unavailable, report this explicitly and fall back to:
   - dispatcher path `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh"` with `OPENCLAW_ROOT` already exported/resolved by the caller.
 - Forbidden for restart: native `gateway` tool call with `action="restart"` (too easy to lose post-restart reply on chat channels).

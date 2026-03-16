@@ -22,13 +22,14 @@ CTO_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CTO_SEED_DIR="${CTO_SEED_DIR:-${CTO_REPO_ROOT}/cto-factory}"
 DEPLOY_MANIFEST="${DEPLOY_MANIFEST:-${CTO_SEED_DIR}/DEPLOY_MANIFEST.txt}"
 CTO_REPO_REF="${CTO_REPO_REF:-main}"
-CTO_MODEL="${CTO_MODEL:-openai/gpt-5.3-codex}"
+CTO_MODEL="${CTO_MODEL:-}"
 OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-3600}"
 UPDATE_REPO="${UPDATE_REPO:-true}"
 FORCE_MODEL_UPDATE="${FORCE_MODEL_UPDATE:-false}"
 RESTART_GATEWAY="${RESTART_GATEWAY:-true}"
 SKIP_CTO_HEALTH_SMOKE="${SKIP_CTO_HEALTH_SMOKE:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
+MODEL_PROVIDERS_ALLOWLIST="${MODEL_PROVIDERS_ALLOWLIST:-}"
 
 BACKUP_DIR=""
 
@@ -160,13 +161,15 @@ rewrite_hardcoded_paths() {
   log_info "Rewriting hardcoded local paths in copied files."
   python3 - "${target_workspace}" "${OPENCLAW_HOME}" <<'PY'
 import pathlib
+import re
 import sys
 
 root = pathlib.Path(sys.argv[1])
 openclaw_home = sys.argv[2]
-needles = [
-    "/Users/uladzislaupraskou/.openclaw",
-    "/home/ubuntu/.openclaw",
+patterns = [
+    re.compile(r"/Users/[^/\s]+/\.openclaw"),
+    re.compile(r"/home/[^/\s]+/\.openclaw"),
+    re.compile(r"/root/\.openclaw"),
 ]
 extensions = {".md", ".sh", ".py", ".txt", ".json", ".yaml", ".yml", ".toml"}
 updated = 0
@@ -181,9 +184,8 @@ for path in root.rglob("*"):
     except Exception:
         continue
     updated_text = text
-    for needle in needles:
-        if needle in updated_text:
-            updated_text = updated_text.replace(needle, openclaw_home)
+    for pattern in patterns:
+        updated_text = pattern.sub(openclaw_home, updated_text)
     if updated_text != text:
         path.write_text(updated_text, encoding="utf-8")
         updated += 1
@@ -192,9 +194,43 @@ print(updated)
 PY
 }
 
+resolve_model_provider_allowlist() {
+  if [[ -n "${MODEL_PROVIDERS_ALLOWLIST}" ]]; then
+    return 0
+  fi
+
+  local runtime_provider_id="${OPENCLAW_RUNTIME_PROVIDER_ID:-}"
+  local runtime_provider="${OPENCLAW_RUNTIME_PROVIDER:-}"
+
+  if [[ -z "${runtime_provider_id}" || -z "${runtime_provider}" ]]; then
+    local env_file="${OPENCLAW_HOME}/.env"
+    if [[ -f "${env_file}" ]]; then
+      runtime_provider_id="${runtime_provider_id:-$(grep -E '^OPENCLAW_RUNTIME_PROVIDER_ID=' "${env_file}" | tail -n1 | cut -d= -f2- || true)}"
+      runtime_provider="${runtime_provider:-$(grep -E '^OPENCLAW_RUNTIME_PROVIDER=' "${env_file}" | tail -n1 | cut -d= -f2- || true)}"
+    fi
+  fi
+
+  case "${runtime_provider_id:-${runtime_provider}}" in
+    anthropic)
+      MODEL_PROVIDERS_ALLOWLIST="anthropic"
+      ;;
+    openai-codex)
+      MODEL_PROVIDERS_ALLOWLIST="openai-codex"
+      ;;
+    openai|"")
+      MODEL_PROVIDERS_ALLOWLIST="openai"
+      ;;
+    *)
+      MODEL_PROVIDERS_ALLOWLIST="${runtime_provider_id:-${runtime_provider}}"
+      ;;
+  esac
+
+  log_info "Resolved MODEL_PROVIDERS_ALLOWLIST=${MODEL_PROVIDERS_ALLOWLIST}."
+}
+
 upsert_cto_agent_config() {
   backup_file "${OPENCLAW_CONFIG_PATH}"
-  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" <<'PY'
+  python3 - "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_HOME}" "${CTO_MODEL}" "${FORCE_MODEL_UPDATE}" "${OPENCLAW_AGENT_TIMEOUT_SECONDS}" "${MODEL_PROVIDERS_ALLOWLIST}" <<'PY'
 import json
 import pathlib
 import sys
@@ -204,6 +240,7 @@ openclaw_home = pathlib.Path(sys.argv[2])
 cto_model = sys.argv[3]
 force_model_update = (sys.argv[4].strip().lower() == "true")
 agent_timeout_seconds = int(sys.argv[5])
+providers_arg = sys.argv[6] if len(sys.argv) > 6 else ""
 
 data = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -214,12 +251,174 @@ if isinstance(agents, list):
 defaults = agents.setdefault("defaults", {})
 defaults["timeoutSeconds"] = agent_timeout_seconds
 
+
+def uniq(seq):
+    seen = set()
+    out = []
+    for item in seq:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def pick_first(candidates, allowed):
+    for m in candidates:
+        if not m:
+            continue
+        if not allowed or m in allowed:
+            return m
+    return ""
+
+
+provider_allowlist = [p.strip() for p in providers_arg.split(",") if p.strip()]
+if provider_allowlist == ["anthropic"]:
+    provider_mode = "anthropic"
+elif provider_allowlist == ["openai-codex"]:
+    provider_mode = "openai-codex"
+else:
+    provider_mode = "openai"
+
+defaults_models = defaults.get("models") or {}
+allowed_models = [m for m in defaults_models.keys() if isinstance(m, str)] if isinstance(defaults_models, dict) else []
+allowed_set = set(allowed_models)
+
+def matches_provider_prefix(model, prefixes):
+    if not model:
+        return False
+    return any(model.startswith(p + "/") for p in prefixes)
+
+
+if provider_mode == "anthropic":
+    preferred_primary = [
+        cto_model,
+        "anthropic/claude-opus-4-6",
+        "anthropic/claude-opus-4-5",
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4-5",
+    ]
+    preferred_fallbacks = [
+        "anthropic/claude-opus-4-5",
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-3-7-sonnet-latest",
+        "anthropic/claude-3-5-sonnet-20241022",
+    ]
+    preferred_heartbeat = [
+        "anthropic/claude-3-5-haiku-latest",
+        "anthropic/claude-3-5-haiku-20241022",
+        "anthropic/claude-3-haiku-20240307",
+        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-haiku-4-5-20251001",
+    ]
+elif provider_mode == "openai-codex":
+    preferred_primary = [
+        cto_model,
+        "openai-codex/gpt-5.3-codex",
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+    ]
+    preferred_fallbacks = [
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+        "openai/gpt-4.1",
+    ]
+    preferred_heartbeat = [
+        "openai/gpt-5-nano",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.2",
+    ]
+else:
+    preferred_primary = [
+        cto_model,
+        "openai/gpt-5.3-codex",
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+    ]
+    preferred_fallbacks = [
+        "openai-codex/gpt-5.4",
+        "openai/gpt-5.2-codex",
+        "openai/gpt-5.2",
+        "openai/gpt-4.1",
+    ]
+    preferred_heartbeat = [
+        "openai/gpt-5-nano",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.2",
+    ]
+
+preferred_primary = uniq(preferred_primary)
+preferred_fallbacks = uniq(preferred_fallbacks)
+preferred_heartbeat = uniq(preferred_heartbeat)
+
+if provider_mode == "anthropic":
+    required_prefixes = ["anthropic"]
+elif provider_mode == "openai-codex":
+    required_prefixes = ["openai-codex", "openai"]
+else:
+    required_prefixes = ["openai"]
+
+if cto_model and not matches_provider_prefix(cto_model, required_prefixes):
+    cto_model = ""
+
+selected_primary = pick_first(preferred_primary, set())
+if not selected_primary:
+    if provider_mode == "anthropic":
+        selected_primary = cto_model or "anthropic/claude-opus-4-5"
+    elif provider_mode == "openai-codex":
+        selected_primary = cto_model or "openai-codex/gpt-5.3-codex"
+    else:
+        selected_primary = cto_model or "openai/gpt-5.3-codex"
+
+selected_fallbacks = []
+for m in preferred_fallbacks:
+    if m == selected_primary:
+        continue
+    if not matches_provider_prefix(m, required_prefixes):
+        continue
+    selected_fallbacks.append(m)
+selected_fallbacks = uniq(selected_fallbacks)[:3]
+
+if len(selected_fallbacks) < 3 and allowed_models:
+    for m in allowed_models:
+        if m == selected_primary:
+            continue
+        if m in selected_fallbacks:
+            continue
+        if not matches_provider_prefix(m, required_prefixes):
+            continue
+        selected_fallbacks.append(m)
+        if len(selected_fallbacks) >= 3:
+            break
+    selected_fallbacks = uniq(selected_fallbacks)
+
+heartbeat_model = pick_first(preferred_heartbeat, set())
+if not heartbeat_model:
+    heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
+if not matches_provider_prefix(heartbeat_model, required_prefixes):
+    heartbeat_model = selected_fallbacks[-1] if selected_fallbacks else selected_primary
+
+model_payload = {"primary": selected_primary}
+if selected_fallbacks:
+    model_payload["fallbacks"] = selected_fallbacks
+
 agent_list = agents.setdefault("list", [])
 cto_heartbeat = {
-    "every": "5m",
+    "every": "1h",
     "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
     "target": "none",
     "ackMaxChars": 300,
+    "model": heartbeat_model,
 }
 existing = None
 for item in agent_list:
@@ -234,7 +433,7 @@ if existing is None:
         "name": "CTO Factory",
         "workspace": str(openclaw_home / "workspace-factory"),
         "agentDir": str(openclaw_home / "agents/cto-factory/agent"),
-        "model": {"primary": cto_model},
+        "model": model_payload,
         "heartbeat": cto_heartbeat,
         "identity": {
             "name": "CTO Factory Agent",
@@ -249,14 +448,23 @@ else:
     existing["workspace"] = str(openclaw_home / "workspace-factory")
     existing["agentDir"] = str(openclaw_home / "agents/cto-factory/agent")
     existing["heartbeat"] = cto_heartbeat
-    if force_model_update:
-        existing["model"] = {"primary": cto_model}
+    model = existing.get("model")
+    if not isinstance(model, dict):
+        model = {}
+
+    current_primary = str(model.get("primary") or "").strip()
+    provider_mismatch = (
+        (provider_mode == "anthropic" and not current_primary.startswith("anthropic/"))
+        or (provider_mode == "openai" and current_primary.startswith("anthropic/"))
+    )
+
+    if force_model_update or provider_mismatch:
+        existing["model"] = model_payload
     else:
-        model = existing.setdefault("model", {})
-        if not isinstance(model, dict):
-            existing["model"] = {"primary": cto_model}
-        else:
-            model.setdefault("primary", cto_model)
+        model.setdefault("primary", selected_primary)
+        if selected_fallbacks and "fallbacks" not in model:
+            model["fallbacks"] = selected_fallbacks
+        existing["model"] = model
 
 tools = data.setdefault("tools", {})
 sessions = tools.setdefault("sessions", {})
@@ -327,6 +535,7 @@ main() {
 
   sync_workspace_files
   rewrite_hardcoded_paths
+  resolve_model_provider_allowlist
   upsert_cto_agent_config
   validate_config
   restart_gateway_if_needed

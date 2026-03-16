@@ -13,11 +13,7 @@ Prevent UX breakage caused by command collisions, missing cancel paths, and unha
 
 ## MANDATORY RULES
 0. Complexity mode gate:
-   - classify agent UX as `COMPLEX_INTERACTIVE` if ANY is true:
-     - two or more business modes,
-     - user-managed settings/list/schedule controls,
-     - long-running actions with cancel/status,
-     - more than 5 primary user actions.
+   - `COMPLEX_INTERACTIVE` classification rules → `skills/factory-intake/SKILL.md` (section 4b).
    - for `COMPLEX_INTERACTIVE`, interface mode MUST be `buttons` (button-led).
    - in `COMPLEX_INTERACTIVE`, plain command flows MUST NOT be the primary UX path.
 

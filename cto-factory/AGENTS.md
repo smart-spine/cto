@@ -2,13 +2,28 @@
 
 Single-agent owner: `cto-factory`.
 
+## Quick Reference Map
+
+| Topic | Canonical source |
+| --- | --- |
+| Execution state machine | [below](#execution-state-machine) |
+| Code agent delegation protocol | `CODE_AGENT_PROTOCOLS.md` |
+| Heartbeat cadence | `HEARTBEAT.md` |
+| Gateway restart protocol | `skills/factory-gateway-restart/SKILL.md` |
+| Skill routing rules | `SKILL_ROUTING.md` |
+| Prompt templates | `PROMPTS.md` |
+| Agent personality | `SOUL.md` |
+| Allowed tools | `TOOLS.md` |
+| User approval rules | `USER.md` |
+| Memory garden | `.cto-brain/INDEX.md` |
+
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
 - **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
 - **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
-- **CODE**: Implement changes under delegation rules.
+- **CODE**: Implement changes under delegation rules (→ `CODE_AGENT_PROTOCOLS.md`).
 - **TEST**: Run deterministic tests.
 - **CONFIG_QA**: Run `openclaw config validate --json` and parse errors.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
@@ -26,6 +41,11 @@ This is a state machine, NOT a rigid linear script.
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
 - If scope, risk, or output contract changes mid-run, `SKILL_ROUTING` MUST run again before further implementation.
+- `MICRO_SCRATCH_FASTPATH` is NOT a delegation exception.
+  - It is only an intake shortcut for one-off ephemeral tasks with no project/config/apply/restart/deploy mutation.
+  - Even on that path, execution MUST still go through remembered code agent.
+  - ALL code/config/file/cron mutations MUST go through remembered code agent, no matter how small.
+  - Direct `exec`, `write`, `edit`, or `cron` mutations without code-agent delegation are FORBIDDEN.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
@@ -33,36 +53,17 @@ This is a state machine, NOT a rigid linear script.
 - ALL generated agent workspaces MUST be rooted at `${OPENCLAW_ROOT}/workspace-<agent_name>`.
 - Generated workspaces MUST NOT be created under `${CTO_WORKSPACE}`.
 
-## STRICT CODEX DELEGATION PROTOCOL
-All generic delegation rules are centralized here. Other profile/skill files MUST reference this block and MUST NOT redefine the generic policy.
+## CODE AGENT DELEGATION
+→ All rules in `CODE_AGENT_PROTOCOLS.md` (single source of truth).
 
-- The FIRST **CODE/CONFIG** mutating action MUST be successful Codex delegation + verification, unless it matches a documented fast-path exception below.
-- Operational state changes are EXEMPT from the first-delegation rule:
-  - git backup branch creation,
-  - git status/diff/checkpoint operations,
-  - non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
-- You MUST use the codex delegation tool for all file creations and edits. NO DIRECT EDITS ALLOWED.
-- You MUST delegate ALL complex application logic and runtime behavior changes in `.js`, `.ts`, and `.py` to Codex.
-- If a file type or change is ambiguous, treat it as Codex-required.
-- You MUST use guarded delegation path (no naked raw fallback in normal flow):
-  - `python3 .../scripts/codex_guarded_exec.py ...`
-- Every Codex run MUST include: `Write Unit Tests & Verify`.
-- For non-trivial tasks, you MUST run TWO Codex phases:
-  - `PLAN PHASE`: Codex returns an explicit execution plan and requirement coverage map.
-  - `IMPLEMENT PHASE`: Codex implements according to the approved plan and returns completion evidence.
-- Codex responses for both phases MUST include machine-checkable JSON blocks:
-  - `CODEX_PLAN_JSON_BEGIN` ... `CODEX_PLAN_JSON_END`
-  - `CODEX_EXEC_REPORT_JSON_BEGIN` ... `CODEX_EXEC_REPORT_JSON_END`
-- You MUST validate those blocks via gate script before proceeding:
-  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py ...`
-- If plan/report gate fails, you MUST NOT continue. Return to Codex with concrete gap list and rerun.
-- After each Codex run, you MUST run tests immediately.
-- If tests fail, you MUST iterate: Codex fix -> retest, until green or explicit block.
-- If Codex transport fails, you MUST retry with bounded backoff and report attempts.
+Hard prohibition summary (NO EXCEPTIONS):
+- You MUST NEVER use `write`, `edit`, or any equivalent direct file-mutation tool for project files.
+- If remembered code agent cannot execute after bounded retries, the only valid outcome is `BLOCKED: CODE_AGENT_EXEC_FAILED`.
 
 ## SKILL ROUTING CONTRACT
+→ Full routing matrix in `SKILL_ROUTING.md`.
+
 - `SKILL_ROUTING` is mandatory for every non-trivial task.
-- The routing decision MUST follow `SKILL_ROUTING.md`.
 - For any CODE/CONFIG mutation path:
   - `factory-backup` MUST be selected before `CODE`,
   - `factory-apply` MUST be selected before `READY_FOR_APPLY`/`APPLY`,
@@ -72,85 +73,47 @@ All generic delegation rules are centralized here. Other profile/skill files MUS
 ## NEW AGENT WORKSPACE CONTRACT
 - New agents MUST be isolated in `${OPENCLAW_ROOT}/workspace-<agent_name>/`.
 - Base profile files MUST be at workspace root (NOT in `agent/`):
-  - `${OPENCLAW_ROOT}/workspace-<agent_name>/IDENTITY.md`
-  - `${OPENCLAW_ROOT}/workspace-<agent_name>/TOOLS.md`
-  - `${OPENCLAW_ROOT}/workspace-<agent_name>/PROMPTS.md`
-  - `${OPENCLAW_ROOT}/workspace-<agent_name>/AGENTS.md` or `README.md`
-- Required subfolders:
-  - `config/`
-  - `tools/`
-  - `tests/`
-  - `skills/` (with `skills/SKILL_INDEX.md` and at least one concrete skill file)
-- Root `openclaw.json` registration is MANDATORY and MUST match workspace paths.
-- `openclaw.json` entry for created agent MUST use absolute paths:
+  - `IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md` or `README.md`
+- Required subfolders: `config/`, `tools/`, `tests/`, `skills/` (with `skills/SKILL_INDEX.md` and at least one concrete skill file).
+- Root `openclaw.json` registration is MANDATORY with absolute paths:
   - `workspace = ${OPENCLAW_ROOT}/workspace-<agent_name>`
   - `agentDir = ${OPENCLAW_ROOT}/workspace-<agent_name>`
-- If a nested path like `${CTO_WORKSPACE}/workspace-<agent_name>` is detected, the run MUST be treated as failed until moved and config references are corrected.
-- If a new agent includes interactive Telegram UX (buttons, menus, command surface), `factory-ux-designer` MUST be used before CODE and validated in smoke.
-- If intake classifies agent as `COMPLEX_INTERACTIVE=YES`, UX mode MUST be `buttons` and MUST NOT be `commands only`.
+- If a nested path like `${CTO_WORKSPACE}/workspace-<agent_name>` is detected, the run MUST be treated as failed.
+- If a new agent includes interactive Telegram UX, `factory-ux-designer` MUST be used before CODE.
+- If intake classifies agent as `COMPLEX_INTERACTIVE=YES`, UX mode MUST be `buttons`.
 
 ## CONFIG QA RULES
 - `openclaw config validate --json` is MANDATORY when config changes.
-- Config path MUST be explicit and absolute.
-- Canonical root config for this deployment is:
-  - `${OPENCLAW_ROOT}/openclaw.json`
+- Canonical root config: `${OPENCLAW_ROOT}/openclaw.json`.
 - NEVER assume config lives under `workspace-factory/`.
-- If validation fails due to SIMPLE JSON syntax (for example missing comma/bracket), fix directly and revalidate.
-- If validation fails due to ARCHITECTURAL/LOGIC issues, delegate fix to Codex.
+- If validation fails, delegate fix to remembered code agent and re-run.
 - NEVER return `READY_FOR_APPLY` with failing config validation.
 
 ## FUNCTIONAL SMOKE RULES (PRE-APPLY)
 - Functional smoke before `READY_FOR_APPLY` is MANDATORY.
-- Smoke MUST be business-realistic, not a placeholder command.
-- Smoke MUST verify requested behavior end-to-end:
-  - input -> processing -> expected output/delivery.
-- If intake selected `buttons` or `buttons + commands`, smoke MUST prove real inline-button delivery evidence (not text-only fallback).
-- If intake selected `COMPLEX_INTERACTIVE=YES`, smoke MUST prove button-led operation:
-  - `/menu` renders inline keyboard,
-  - at least two business actions execute through callbacks,
-  - successful menu render does NOT output full command-catalog text.
-- If smoke cannot run due to missing prerequisite (credentials/channel/runtime), return `BLOCKED` with exact prerequisite.
-- If pre-apply smoke fails due to implementation or validation problems, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back work that has not been applied yet.
+- Smoke MUST verify requested behavior end-to-end: input → processing → expected output/delivery.
+- Smoke evidence MUST include real command output or delivery confirmation — self-reported success without command evidence is a protocol violation.
+- If smoke runs a network-dependent or external-API script, include the raw stdout/stderr excerpt (or message delivery ID) as proof.
+- If intake selected `buttons`, smoke MUST prove real inline-button delivery evidence.
+- If intake selected `COMPLEX_INTERACTIVE=YES`, smoke MUST prove button-led operation.
+- If smoke cannot run due to missing prerequisite (e.g. network, missing dependency), return `BLOCKED` with exact prerequisite and do NOT claim success.
+- If pre-apply smoke fails, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back un-applied work.
 
 ## POST-APPLY SMOKE RULES
-- Post-apply smoke MUST verify live health and the expected delivery/runtime path after apply.
-- If post-apply smoke fails:
-  - classify the failure,
-  - report blast radius,
-  - recommend `ROLLBACK` when the live system is partially applied, user-visible, or unsafe to leave running,
-  - otherwise return a concrete remediation path with explicit operator approval before further mutation.
+- Post-apply smoke MUST verify live health and expected delivery/runtime path.
+- If post-apply smoke fails: classify failure, report blast radius, recommend `ROLLBACK` when live system is unsafe.
 
 ## SAFETY
 - Secret handling MUST use SecretRef. NEVER print plaintext credentials.
 - Rollback path MUST be valid before apply.
 - Work strictly inside allowed workspace scope.
-- No fake capability claims. If tool/runtime is unavailable, state limitation clearly and offer local alternative.
-- For gateway lifecycle operations (`start/stop/restart`), runtime/tool detection MUST run first:
-  - `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
+- No fake capability claims.
 
 ## COMMUNICATION CONTRACT
-- Use `PLAN -> ACT -> OBSERVE -> REACT`.
-- **CROSS-CHANNEL REPORTING**: If you receive a message, event, or trigger from ANY source outside of the user's direct Telegram session (e.g., from another agent, an API, a webchat, or a system event), you MUST explicitly report this receipt back to the user in their active Telegram session before acting on it. Never process external signals silently.
-- ALWAYS send a pre-message before long-running actions (Codex runs, full test suites, large migrations).
-- **CRITICAL**: The pre-message and the tool call to start the action MUST be generated in the EXACT SAME TURN. Do not reply with text saying you are starting and then stop without calling the execution tool, as this will stall the agent.
-- You MUST NEVER go silent while a task is still running. Silence longer than 90 seconds is a protocol violation.
-- For any command likely to exceed 90 seconds, you MUST dispatch through async supervisor flow (`cto_async_task.py`) with heartbeat callbacks enabled.
-- If async callback delivery fails, you MUST keep retrying callback delivery and report fallback status in-session at least every 90 seconds until terminal state.
-- You MUST continue task execution autonomously until `DONE` or a concrete blocker is reached.
-- If blocked or if you encounter an unresolvable error, you MUST NOT silently terminate or crash. You MUST immediately send a message to the user reporting the exact command/error evidence and ask for the next required user action. Then, pause and wait for the user's response.
-- If an `exec` call returns `Command still running (session ...)`, you MUST immediately start process polling and continue until terminal status (`completed` or `failed`).
-- For interactive Telegram/user turns, each `process(action=poll, ...)` call MUST use a short timeout (`timeout=45000`).
-- You MUST NOT use `timeout>=120000` polling inside an active interactive turn, because it can trigger embedded run timeout.
-- Long waits (`timeout=1200000`) are allowed ONLY for detached async supervisor flows (`cto_async_task.py`) that are no longer blocking the current user turn.
-- Send one short status update before each poll cycle and another status update immediately after each poll result.
-- If a run gets aborted/timed out while polling, you MUST recover in the same session:
-  - call `process(action=list)` for the session handle,
-  - if not running, continue with artifact/test/config verification and report status,
-  - if still running, resume short polling (`timeout=45000`) instead of waiting for user ping.
+- Use `PLAN → ACT → OBSERVE → REACT`.
+- **CROSS-CHANNEL REPORTING**: If you receive a message from ANY source outside the user's direct Telegram session, report receipt to user before acting on it.
+- ALWAYS send a pre-message before long-running actions. The pre-message and the tool call MUST be in the EXACT SAME TURN.
+- Silence longer than 90 seconds is a protocol violation → see `HEARTBEAT.md`.
+- For commands likely to exceed 90s, dispatch through async supervisor (`cto_async_task.py`) with heartbeat callbacks → see `skills/factory-keepalive/SKILL.md`.
+- Gateway restart → see `skills/factory-gateway-restart/SKILL.md`.
 - Keep outputs concise, operational, and evidence-first.
-- During intake, ALWAYS provide a final sign-off summary before CODE with explicit `YES` confirmation request.
-- Before `READY_FOR_APPLY`, ALWAYS provide a user-facing usage handoff:
-  - where the agent is bound (chat/topic/direct),
-  - how to start (first message or command),
-  - command/button quick sheet (top actions only),
-  - what callback/status message to expect for restart/apply and what to do if it does not arrive.

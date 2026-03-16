@@ -4,7 +4,9 @@ description: Validate runtime prerequisites and secret-reference safety before m
 ---
 
 Checks:
-- `openclaw` and `codex` binaries are available,
+- `openclaw` and at least one supported code agent binary (`codex` or `claude`) are available,
+- remembered code agent memory exists or is created:
+  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"`,
 - secret-like credential fields use SecretRef object shape `{source, provider, id}`,
 - task stays within declared workspace scope,
 - free disk space in project filesystem is sufficient for the run (warn/block if critically low),
@@ -16,7 +18,7 @@ Checks:
 - gateway health is captured (`openclaw gateway status`) for tasks that require runtime checks/telegram delivery,
 - root `openclaw.json` provider/model context is read and summarized before CODE,
 - provider/model proposal aligns with currently used provider family unless explicitly overridden by user,
-- codex model id sanity is checked before delegation:
+- selected code-agent model id sanity is checked before delegation:
   - malformed/provider-prefixed model ids (for example `openai-codex/gpt-5.3-codex`) are normalized or flagged,
   - chosen fallback is reported before CODE starts,
 - for cross-agent orchestration tasks: verify `tools.sessions.visibility` is `all`,

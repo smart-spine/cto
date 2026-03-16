@@ -67,6 +67,19 @@ run_as_root() {
   fi
 }
 
+mask_secret() {
+  local value="$1"
+  local len="${#value}"
+  if [[ "${len}" -le 4 ]]; then
+    printf '%s' "****"
+  else
+    local visible="${value: -4}"
+    local masked_len=$(( len - 4 ))
+    printf '%*s' "${masked_len}" '' | tr ' ' '*'
+    printf '%s' "${visible}"
+  fi
+}
+
 prompt_secret() {
   local var_name="$1"
   local prompt_text="$2"
@@ -89,11 +102,20 @@ prompt_secret() {
   if [[ "${optional}" == "true" ]]; then
     read -r -s -p "${prompt_text} (optional): " entered
     echo
+    if [[ -n "${entered}" ]]; then
+      printf '  %s accepted: %s\n' "✓" "$(mask_secret "${entered}")"
+    else
+      printf '  %s skipped (empty)\n' "–"
+    fi
   else
     while [[ -z "${entered}" ]]; do
       read -r -s -p "${prompt_text}: " entered
       echo
+      if [[ -z "${entered}" ]]; then
+        printf '  %s value cannot be empty, try again.\n' "✗"
+      fi
     done
+    printf '  %s accepted: %s\n' "✓" "$(mask_secret "${entered}")"
   fi
   printf -v "${var_name}" "%s" "${entered}"
 }
@@ -161,22 +183,64 @@ with_openclaw_env() {
 
 stop_gateway_background() {
   local openclaw_home="${OPENCLAW_HOME:-$HOME/.openclaw}"
+  local openclaw_port="${OPENCLAW_PORT:-18789}"
   local pid_file="${openclaw_home}/.gateway.pid"
-  if with_openclaw_env openclaw health --json >/dev/null 2>&1; then
-    with_openclaw_env openclaw gateway stop >/dev/null 2>&1 || true
+
+  terminate_pid_soft_hard() {
+    local pid="$1"
+    [[ -n "${pid}" ]] || return 0
+    [[ "${pid}" =~ ^[0-9]+$ ]] || return 0
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      return 0
+    fi
+    kill "${pid}" >/dev/null 2>&1 || true
     sleep 1
-  fi
+    if kill -0 "${pid}" >/dev/null 2>&1; then
+      kill -9 "${pid}" >/dev/null 2>&1 || true
+    fi
+  }
+
+  # Try graceful shutdown first regardless of health state.
+  with_openclaw_env openclaw gateway stop >/dev/null 2>&1 || true
+  sleep 1
+
   if [[ -f "${pid_file}" ]]; then
     local pid
     pid="$(cat "${pid_file}" 2>/dev/null || true)"
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      kill "${pid}" >/dev/null 2>&1 || true
-      sleep 1
-      if kill -0 "${pid}" >/dev/null 2>&1; then
-        kill -9 "${pid}" >/dev/null 2>&1 || true
-      fi
-    fi
+    terminate_pid_soft_hard "${pid}"
     rm -f "${pid_file}"
+  fi
+
+  # Kill orphaned gateway processes not tracked by .gateway.pid.
+  if command -v pgrep >/dev/null 2>&1; then
+    local orphan_pid=""
+    # Common process names across OpenClaw builds.
+    while read -r orphan_pid; do
+      [[ -n "${orphan_pid}" ]] || continue
+      if [[ "${orphan_pid}" == "$$" || "${orphan_pid}" == "${PPID:-}" ]]; then
+        continue
+      fi
+      terminate_pid_soft_hard "${orphan_pid}"
+    done < <(
+      {
+        pgrep -f "openclaw-gateway" || true
+        pgrep -f "openclaw gateway run" || true
+        pgrep -f "openclaw.*gateway" || true
+      } | sort -u
+    )
+  fi
+
+  # Last resort: free configured TCP port if still occupied.
+  if command -v ss >/dev/null 2>&1; then
+    local port_pid=""
+    while read -r port_pid; do
+      terminate_pid_soft_hard "${port_pid}"
+    done < <(
+      ss -ltnp 2>/dev/null \
+        | awk -v p=":${openclaw_port}" '$4 ~ p"$" {print $NF}' \
+        | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+        | sort -u
+    )
   fi
 }
 
@@ -218,4 +282,124 @@ wait_for_gateway_health() {
     fi
     sleep 1
   done
+}
+
+sync_allowed_models_from_provider_catalog() {
+  local config_path="${OPENCLAW_CONFIG_PATH:-${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json}"
+  local providers_csv="${MODEL_PROVIDERS_ALLOWLIST:-openai,openai-codex}"
+  local strict_mode="${MODEL_ALLOWLIST_STRICT:-true}"
+
+  [[ -f "${config_path}" ]] || die "Cannot sync models: missing config ${config_path}"
+  require_cmd python3
+  require_cmd openclaw
+
+  local sync_out=""
+  if ! sync_out="$(python3 - "${config_path}" "${providers_csv}" "${strict_mode}" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+
+config_path = pathlib.Path(sys.argv[1])
+providers = [p.strip() for p in sys.argv[2].split(",") if p.strip()]
+strict_mode = str(sys.argv[3]).strip().lower() in {"1", "true", "yes", "on"}
+
+if not providers:
+    raise SystemExit("MODEL_PROVIDERS_ALLOWLIST is empty.")
+
+data = json.loads(config_path.read_text(encoding="utf-8"))
+agents = data.setdefault("agents", {})
+if isinstance(agents, list):
+    agents = {"list": agents}
+    data["agents"] = agents
+defaults = agents.setdefault("defaults", {})
+model_cfg = defaults.setdefault("model", {})
+if not isinstance(model_cfg, dict):
+    model_cfg = {}
+    defaults["model"] = model_cfg
+primary = str(model_cfg.get("primary") or "").strip()
+
+existing_models = defaults.get("models")
+if not isinstance(existing_models, dict):
+    existing_models = {}
+
+collected = []
+missing = []
+
+for provider in providers:
+    cmd = ["openclaw", "models", "list", "--all", "--provider", provider, "--plain"]
+    try:
+        output = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        output = ""
+    provider_models = []
+    for raw in output.splitlines():
+        item = raw.strip()
+        if not item:
+            continue
+        if item.startswith(provider + "/"):
+            provider_models.append(item)
+    if provider_models:
+        collected.extend(provider_models)
+    else:
+        missing.append(provider)
+
+seen = set()
+ordered = []
+for model in collected:
+    if model in seen:
+        continue
+    seen.add(model)
+    ordered.append(model)
+
+if primary and primary not in seen:
+    ordered.insert(0, primary)
+    seen.add(primary)
+
+if not ordered:
+    raise SystemExit("No models discovered for configured providers.")
+
+new_models = {}
+for model in ordered:
+    prev = existing_models.get(model, {})
+    if isinstance(prev, dict):
+        new_models[model] = prev
+    else:
+        new_models[model] = {}
+
+if strict_mode:
+    prefixes = tuple(p + "/" for p in providers)
+    new_models = {k: v for k, v in new_models.items() if k.startswith(prefixes)}
+    if primary and primary not in new_models:
+        new_models[primary] = {}
+
+if not new_models:
+    raise SystemExit("Model allowlist is empty after strict filtering.")
+
+defaults["models"] = new_models
+config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+print(json.dumps({
+    "count": len(new_models),
+    "providers": providers,
+    "missingProviders": missing,
+    "strict": strict_mode
+}))
+PY
+)"; then
+    die "Failed to sync allowed models from provider catalog."
+  fi
+
+  local count
+  count="$(printf "%s" "${sync_out}" | jq -r '.count // 0' 2>/dev/null || printf "0")"
+  if [[ -z "${count}" || "${count}" == "0" ]]; then
+    die "Model sync produced an empty allowlist."
+  fi
+  log_info "Synced ${count} allowed models from providers: ${providers_csv}."
+
+  local missing
+  missing="$(printf "%s" "${sync_out}" | jq -r '.missingProviders // [] | join(",")' 2>/dev/null || true)"
+  if [[ -n "${missing}" && "${missing}" != "null" ]]; then
+    log_warn "No models discovered for providers: ${missing}"
+  fi
 }

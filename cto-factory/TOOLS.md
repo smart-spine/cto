@@ -1,7 +1,7 @@
 # TOOLS
 
 Allowed:
-- `read` (All file mutations MUST be done via codex, `write`, `edit`, `apply_patch` tools are STRICTLY FORBIDDEN)
+- `read` (All file mutations MUST be done via remembered local code agent, `write`, `edit`, `apply_patch` tools are STRICTLY FORBIDDEN)
 - `exec` for deterministic commands
 - `sessions_spawn` for cross-agent runtime testing/orchestration
 - `sessions_list`, `sessions_history`, `sessions_send`, `session_status` for agent orchestration
@@ -14,7 +14,9 @@ Preferred command families:
 - `openclaw gateway *`
 - `openclaw system event --mode now --text "..."`
 - `openclaw message send --channel telegram --target <chat>:topic:<topic> --message "..."`
-- `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" ...` (primary path for code mutations)
+- `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"` (resolve remembered local code agent)
+- `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" ...` (Codex guarded path when remembered code agent is `codex`)
+- `claude -p "<prompt>" --output-format text --permission-mode default` (Claude path when remembered code agent is `claude`)
 - `git` (backup/rollback)
 - `node`, `python3`, `jq`
 - `sessions_send` / `sessions_spawn` for multi-agent coordination and black-box testing of created agents
@@ -25,23 +27,12 @@ Preferred command families:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_config_diff.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_agent_artifact_gate.py" ...`
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" ...`
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_qa_suite_v2.py" ...`
-  - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_stress_runner.py" ...`
 
 Safety:
 - mutate only target workspace,
 - do not run destructive commands outside rollback policy,
-- never expose secret values.
+- never expose secret values,
 - avoid host-wide discovery commands unless user explicitly requested forensic investigation.
-- for any code/config mutation behavior, follow the centralized `STRICT CODEX DELEGATION PROTOCOL` in `AGENTS.md`; command examples here do not override it.
-- for any `openclaw ...` command, use `factory-openclaw-ops` (`PLAN -> ACT -> OBSERVE -> REACT`) and report exit code + key result line.
-- for gateway restart, use detached restart flow + callback event so the user gets completion feedback.
-- before gateway restart, run runtime detector:
-  - `"$OPENCLAW_ROOT/workspace-factory/scripts/gateway-runtime-detect.sh" 12`
-- preferred restart ACT command:
-  - `OPENCLAW_ROOT="$OPENCLAW_ROOT" nohup /usr/bin/env bash "$OPENCLAW_ROOT/workspace-factory/scripts/gateway-restart-callback.sh" --agent-id cto-factory --callback-session-id "${CTO_SESSION_ID:-$OPENCLAW_SESSION_ID}" >/dev/null 2>&1 &`.
-- forbidden for restart: native `gateway` tool call with `action=\"restart\"`.
-- forbidden: naked `openclaw gateway restart` without pre-ack and callback workflow.
-- forbidden: `openclaw gateway restart && ...` command chaining in one blocking action.
-- forbidden: `exec` with `background=true` for direct `codex_guarded_exec.py` runs.
-- for codex executions expected to exceed 90s, preferred path is `cto_async_task.py start ... --cmd "<codex_guarded_exec ...>"` with heartbeat callbacks.
+- Code/config mutation rules → `CODE_AGENT_PROTOCOLS.md`.
+- Gateway restart protocol → `skills/factory-gateway-restart/SKILL.md`.
+- Long-running task dispatch → `skills/factory-keepalive/SKILL.md`.

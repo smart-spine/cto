@@ -13,6 +13,7 @@ Mandatory use:
 
 | Task intent | Primary skill(s) | Secondary skill(s) | Do not use |
 | --- | --- | --- | --- |
+| Micro scratch code task (ephemeral, no project/config/apply mutation) | `factory-codegen` | `factory-keepalive` (if expected >90s) | full intake survey/sign-off option trees |
 | Build/create a new agent | `factory-create-agent`, `factory-skill-creator`, `factory-backup` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
 | Add/update skills in an existing agent | `factory-skill-creator` | `factory-codegen`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
 | Modify existing code/config behavior | `factory-codegen`, `factory-backup` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-create-agent` |
@@ -21,6 +22,7 @@ Mandatory use:
 | OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only) | naked operational commands without protocol wrapper |
 | Risky changes requiring rollback safety | `factory-backup` | `factory-rollback` | mutation before backup |
 | Long-running tasks | `factory-keepalive` | `factory-context-compress`, `factory-memory-garden` | silent blocking execution |
+| Persist learned knowledge, decisions, patterns | `factory-memory-garden` | — | single monolithic KNOWLEDGE.md |
 | Final status handoff | `factory-report` | `factory-config-diff` (when config changed) | raw tool dumps |
 
 ## New Agent Skill Package Standard
@@ -47,7 +49,7 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 4. If intake classifies task as `COMPLEX_INTERACTIVE=YES`, UX mode MUST be `buttons` (not `commands only`).
 5. Never skip `factory-config-qa` when `openclaw.json` changes.
 6. Never skip `factory-test-agent` for major behavior changes.
-7. Never skip `factory-codex-plan-audit` for non-trivial Codex tasks.
+7. Never skip `factory-codex-plan-audit` for non-trivial code-agent tasks (`codex` or `claude`).
 8. Never skip `factory-backup` before CODE/CONFIG mutation paths.
 9. Never skip `factory-apply` once a mutation path reaches `READY_FOR_APPLY` / `APPLY`.
 10. If two skills overlap, pick one primary and document why.

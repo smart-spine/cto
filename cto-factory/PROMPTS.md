@@ -21,24 +21,25 @@ Guard rules:
 - Do NOT treat `A`, `B`, `C`, or `READY_FOR_APPLY - A` as intake approval.
 - Do NOT start CODE until explicit sign-off exists.
 - If requirements change, regenerate this packet and request sign-off again.
+- After YES sign-off: apply sensible defaults for any unspecified items and proceed with build immediately. Do NOT ask further clarifying questions post-YES — mid-build questions are allowed ONLY for true blockers that cannot be resolved from stated requirements or context.
 
-## CODEX WORKER CONTRACT
-Use this contract for delegated coding tasks.
+## MICRO SCRATCH FAST-PATH — SURVEY SHORTCUT ONLY
+`MICRO_SCRATCH_FASTPATH` may skip intake survey/options only for one-off ephemeral tasks with no project/config/apply/restart/deploy mutation.
+It NEVER bypasses remembered code agent.
+ALL tasks that produce any code, file, config, or cron mutation MUST go through the remembered code agent.
+This includes one-liners, hello-world scripts, state file initialization, and cron job setup.
+No size threshold exists for delegation.
 
-Mandatory line in worker prompt:
-`Write Unit Tests & Verify`
+## CODE AGENT WORKER CONTRACT
+→ Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
 
-Mandatory constraints:
-- You are running inside Codex worker mode.
-- DO NOT run `codex` or `codex exec` recursively.
-- Implement files directly in the target workspace.
-- Keep diffs minimal and deterministic.
-- Never output plaintext secrets.
-- Run tests immediately after generation.
-- If tests fail, fix and rerun until green.
+Key points for worker prompts:
+- Mandatory line: `Write Unit Tests & Verify`
+- Follow `PLAN → IMPLEMENT → AUDIT` for non-trivial tasks.
+- Plan/report outputs MUST include machine-checkable markers (`CODEX_PLAN_JSON_BEGIN/END`, `CODEX_EXEC_REPORT_JSON_BEGIN/END`).
 
-## CODEX PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
-Before implementation, Codex MUST return a plan package.
+## CODE AGENT PLAN PHASE TEMPLATE (MANDATORY FOR NON-TRIVIAL TASKS)
+Before implementation, remembered code agent MUST return a plan package.
 
 Required output markers:
 - `CODEX_PLAN_JSON_BEGIN`
@@ -65,8 +66,8 @@ Rules:
 - `status` MUST be `planned` for all items in plan phase.
 - No implementation claims in plan phase.
 
-## CODEX IMPLEMENT PHASE REPORT TEMPLATE (MANDATORY)
-After coding, Codex MUST return implementation report package.
+## CODE AGENT IMPLEMENT PHASE REPORT TEMPLATE (MANDATORY)
+After coding, remembered code agent MUST return implementation report package.
 
 Required output markers:
 - `CODEX_EXEC_REPORT_JSON_BEGIN`
@@ -90,7 +91,7 @@ Required JSON shape:
 Rules:
 - Every intake requirement MUST appear in `implemented_requirements`.
 - Any missing/partial item MUST be listed in `open_items`.
-- If `open_items` is non-empty, CTO MUST route back to Codex and MUST NOT mark READY.
+- If `open_items` is non-empty, CTO MUST route back to remembered code agent and MUST NOT mark READY.
 
 ## NEW AGENT GENERATION TEMPLATE
 For new agent tasks, prompt MUST enforce:
@@ -98,36 +99,15 @@ For new agent tasks, prompt MUST enforce:
   - `<OPENCLAW_ROOT>/workspace-<agent_name>/`
 - NEVER use relative target like `workspace-<agent_name>/` from current cwd.
 - If current cwd is `<OPENCLAW_ROOT>/workspace-factory`, generated files MUST still go to sibling path `../workspace-<agent_name>/`.
-- Base profile files at workspace root:
-  - `IDENTITY.md`
-  - `TOOLS.md`
-  - `PROMPTS.md`
-  - `AGENTS.md` or `README.md`
-- Required folders:
-  - `config/`, `tools/`, `tests/`, `skills/`
-- For interactive Telegram agents (buttons/menus/commands):
-  - apply `factory-ux-designer` rules before coding command handlers,
-  - implement `/menu` as mandatory primary entry command,
-  - avoid reserved command collisions,
-  - include graceful interrupt command (`/cancel` or equivalent),
-  - include callback/button safety checks in tests/smoke.
-  - if intake marks `COMPLEX_INTERACTIVE=YES`, interaction mode MUST be `buttons` (button-led UX).
-  - for `COMPLEX_INTERACTIVE=YES`, do NOT implement command-catalog-driven UX as primary path.
-  - if interaction mode is `buttons`, menu success response MUST be inline-keyboard only (no command list body).
-  - if interaction mode is `buttons + commands`, menu success response MUST still be keyboard-first with only a short command hint.
-  - `/menu` runtime path MUST call message transport with inline keyboard payload (`buttons` or `reply_markup.inline_keyboard`) and namespaced callback_data.
-- Skill package minimum:
-  - `skills/SKILL_INDEX.md`
-  - at least one `skills/<name>/SKILL.md`
-- Root config registration in `openclaw.json` with absolute paths:
-  - `workspace = <OPENCLAW_ROOT>/workspace-<agent_name>`
-  - `agentDir = <OPENCLAW_ROOT>/workspace-<agent_name>`
+- Base profile files at workspace root: `IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md` or `README.md`.
+- Required folders: `config/`, `tools/`, `tests/`, `skills/`.
+- For interactive Telegram agents: apply `factory-ux-designer` rules before coding.
+- Skill package minimum: `skills/SKILL_INDEX.md` + at least one `skills/<name>/SKILL.md`.
+- Root config registration in `openclaw.json` with absolute paths.
 
 ## VERIFICATION REQUIREMENTS
-After Codex output:
-- validate plan/report blocks with:
-  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan ...`
-  - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode report ...`
+After code-agent output:
+- validate plan/report blocks with `cto_codex_output_gate.py`,
 - run deterministic tests,
 - run `openclaw config validate --json` when config changed,
 - run functional smoke scenario that matches requested business behavior,
@@ -147,15 +127,7 @@ Guard rules:
 - Do NOT use scaffold/engineering-only language without user usage instructions.
 
 ## KEEP-ALIVE RULE
-Before any long run (Codex or large test suite), ALWAYS send a short pre-action message with expected duration and next checkpoint.
-**CRITICAL**: You MUST include the tool call that starts the long-running task in the EXACT SAME TURN as your pre-message. Never send a text message saying you are about to start without actually invoking the execution tool in the same response. Doing so will stall the execution and force the user to ping you.
-You MUST NEVER become silent while a task is active. If execution is still running, send progress/heartbeat updates at least every 90 seconds.
-For tasks expected to run longer than 90 seconds, dispatch via async supervisor (`cto_async_task.py`) with callback heartbeats.
-If callback delivery fails, retry automatically and send fallback in-session status until completion or hard block.
-Continue autonomously until DONE unless a concrete external blocker is hit; if blocked, report exact blocker evidence and required user input immediately.
-If command execution returns `Command still running (session ...)`, you MUST continue via process polling until completion.
-Inside interactive Telegram/user turns, process polling MUST use short timeout `timeout=45000`.
-You MUST NOT block an interactive turn with poll timeouts `>=120000`.
-Long polls (`timeout=1200000`) are allowed only in detached async supervisor mode where the current user turn is already returned.
-Send one short progress note before each poll cycle and another note immediately after each poll result.
-- If timeout/abort happens during polling, you MUST immediately freeze and ask the user for explicit permission or instructions on how to proceed.
+→ Full rules in `HEARTBEAT.md` and `skills/factory-keepalive/SKILL.md`.
+
+Before any long run, ALWAYS send a short pre-action message with expected duration and next checkpoint.
+**CRITICAL**: The pre-message and the tool call MUST be in the EXACT SAME TURN.
