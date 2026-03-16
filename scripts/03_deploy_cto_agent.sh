@@ -884,6 +884,9 @@ main() {
   sync_allowed_models_from_provider_catalog
 
   log_info "Stage 6/8: Restarting gateway before health checks."
+  if command -v loginctl >/dev/null 2>&1; then
+    sudo loginctl enable-linger "$(whoami)" 2>/dev/null || true
+  fi
   restart_gateway_background
   if ! wait_for_gateway_health 90; then
     die "Gateway health check timed out during CTO deployment."
