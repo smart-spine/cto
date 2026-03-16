@@ -426,9 +426,6 @@ if provider_mode == "anthropic":
         "anthropic/claude-3-5-sonnet-20241022",
     ]
     preferred_heartbeat = [
-        "anthropic/claude-3-5-haiku-latest",
-        "anthropic/claude-3-5-haiku-20241022",
-        "anthropic/claude-3-haiku-20240307",
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-haiku-4-5-20251001",
     ]
