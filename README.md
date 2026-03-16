@@ -2,7 +2,7 @@
 
 The core premise in one sentence: taking the CTO concept from theory to reality by deploying the automated state machine on your own server.
 
-This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`). The main path in this guide is **OpenAI OAuth with a ChatGPT Plus/Pro subscription**, because it is the fastest route for most people. Other supported authentication paths are still available and listed below.
+This repository installs OpenClaw and deploys the **CTO Factory Agent** (`cto-factory`). The walkthrough screenshots below use **OpenAI OAuth with a ChatGPT Plus/Pro subscription** as one concrete example path. The same scripts also support the other authentication paths listed below.
 
 What the CTO bot is for:
 - safer agent creation workflow
@@ -69,7 +69,7 @@ CTO supports exactly 4 auth paths. Pick one and follow it end-to-end.
 | 4. Anthropic API key | Claude Code with API key | Anthropic with API key | pay-as-you-go Anthropic usage |
 
 What this README focuses on:
-- the **recommended path** is **Path 1: OpenAI OAuth subscription**
+- the step-by-step screenshots below follow **Path 1: OpenAI OAuth subscription** as one example
 - the scripts still support all 4 paths
 - if you choose an API-key path and both the coding agent and the runtime use the same provider, Script `01` reuses that key automatically
 
@@ -130,7 +130,7 @@ Script `01` is the main installer wizard. It asks you:
 - which provider OpenClaw runtime should use (`OpenAI` or `Anthropic`)
 - how the runtime should authenticate
 
-The **recommended path** is:
+One concrete walkthrough in this guide uses:
 - `OpenAI Codex CLI`
 - `ChatGPT Plus/Pro login`
 - runtime provider: `OpenAI`
@@ -148,7 +148,7 @@ If this step appears stuck for more than 5 minutes during Node.js setup:
 - press `ENTER` once in the same terminal
 - some Ubuntu hosts pause on an interactive `needrestart` prompt
 
-#### Recommended walkthrough: OpenAI OAuth subscription
+#### Example walkthrough: OpenAI OAuth subscription
 
 1. Select `OpenAI Codex CLI` as the coding agent.
 
