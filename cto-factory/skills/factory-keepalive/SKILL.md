@@ -36,6 +36,19 @@ Preferred flow:
    - callback path MUST wake CTO session on completion (success or failure),
    - report final status (`completed`/`failed`) with exit code and next action.
 
+Sub-agent dispatch guardrail (mandatory):
+- For any `openclaw agent --message` call to another agent expected to take >60s, use the async dispatcher:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_dispatch_agent.py" \
+    --agent <id> --message "<text>" \
+    --session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}"
+  ```
+- On `ASYNC_TASK_COMPLETE` callback, tail the log to retrieve sub-agent output:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 60
+  ```
+- Direct foreground `openclaw agent --message` is ONLY allowed for short queries (≤60s expected).
+
 Codex-specific guardrail (mandatory):
 - for `codex_guarded_exec.py`, if expected runtime > 90s you MUST wrap it with `cto_async_task.py` (callback heartbeats enabled).
 - for short codex runs (<=90s expected), foreground is allowed with built-in heartbeat (`[codex-guard] still running ...`).

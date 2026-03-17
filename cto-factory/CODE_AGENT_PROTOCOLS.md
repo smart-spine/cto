@@ -84,7 +84,27 @@ Operational rules:
 - NEVER use `--permission-mode bypassPermissions` or `--dangerously-skip-permissions` in this workflow.
 - If a command contains forbidden permission flags, rerun with `--permission-mode default` and continue delegation flow.
 
-## 5) Healthcheck Contract
+## 5) Sub-Agent Dispatch Protocol
+
+When dispatching work to another openclaw agent (e.g. `openclaw agent --message ... --agent <id>`):
+
+- Direct foreground `openclaw agent --message` calls are FORBIDDEN for any task expected to take >60 seconds.
+- ALL sub-agent dispatches MUST use the async dispatcher wrapper:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_dispatch_agent.py" \
+    --agent <id> \
+    --message "<task description>" \
+    --session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}"
+  ```
+- The wrapper returns `task_id` immediately. CTO receives heartbeat callbacks every 60 seconds.
+- On `ASYNC_TASK_COMPLETE` callback: tail the log to read the sub-agent's output:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 60
+  ```
+- For short sub-agent calls (≤60s expected, e.g. a simple status query): foreground is allowed.
+- If in doubt, always use the async wrapper — it returns immediately regardless.
+
+## 6) Healthcheck Contract
 
 When validating CTO deployment:
 

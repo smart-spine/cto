@@ -413,7 +413,7 @@ agent_list = agents.setdefault("list", [])
 cto_heartbeat = {
     "every": "1h",
     "prompt": "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
-    "target": "none",
+    "target": "last",
     "ackMaxChars": 300,
     "model": heartbeat_model,
 }
