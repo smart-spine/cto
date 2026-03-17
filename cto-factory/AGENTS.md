@@ -145,6 +145,7 @@ Hard prohibition summary (NO EXCEPTIONS):
 - If intake selected `COMPLEX_INTERACTIVE=YES`, smoke MUST prove button-led operation.
 - If smoke cannot run due to missing prerequisite (e.g. network, missing dependency), return `BLOCKED` with exact prerequisite and do NOT claim success.
 - If pre-apply smoke fails, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back un-applied work.
+- If the task created or modified any agent skills: smoke MUST include a per-skill invocation test — send a message that specifically triggers each new/modified skill and verify the response demonstrates the skill's intended behavior. A generic successful response without skill execution evidence is a smoke failure. See `skills/factory-smoke/SKILL.md` step 6a for the full protocol.
 
 ## POST-APPLY SMOKE RULES
 - Post-apply smoke MUST verify live health and expected delivery/runtime path.

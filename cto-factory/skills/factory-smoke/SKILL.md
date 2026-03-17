@@ -31,6 +31,28 @@ For newly created/modified agents (mandatory):
 6. Run at least one real one-shot execution against the target agent with a bounded timeout:
    - `timeout 60 openclaw agent --agent <id> --message "<realistic user request>"`
    - on macOS use `gtimeout 60 ...` if GNU `timeout` is not available.
+
+## Skill Invocation Testing (mandatory when any skill was created or modified)
+
+When any `skills/<name>/SKILL.md` or skill tool file was created or modified:
+
+6a. For each new or modified skill, run a **skill-targeted invocation test**:
+   - Identify the skill's trigger: the realistic user phrase or command that routes to this skill according to `SKILL_INDEX.md` or the skill's own description.
+   - Send a message specifically crafted to invoke this skill (not a generic greeting or unrelated request):
+     - Short-running agent (expected <30s):
+       `timeout 60 openclaw agent --agent <id> --message "<skill trigger phrase>" --json`
+     - Long-running agent or LLM-backed skill (expected >30s):
+       `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_dispatch_agent.py" --agent <id> --message "<skill trigger phrase>"`
+   - Verify skill execution evidence in the response:
+     - response demonstrates the skill's intended behavior (report structure, expected output fields, side-effect confirmation),
+     - response is NOT a generic "I don't understand" or fallback — this counts as a routing failure,
+     - if the skill produces a file, API call, or delivery, verify that effect in the filesystem or channel log.
+   - PASS criteria: the response unambiguously shows the skill ran (content matches skill purpose).
+   - FAIL criteria: generic response, wrong skill routing, empty output, or missing side-effect → `RETURN_TO_CODE` with exact mismatch.
+   - If the agent is not yet registered (new agent pending apply): mark this check as `BLOCKED: REQUIRES_APPLY_FIRST` and add it as a mandatory post-apply smoke step.
+
+6b. If the task modified skill routing (`SKILL_INDEX.md` or `SKILL_ROUTING.md`), run one invocation test per modified routing path to confirm correct dispatch.
+
 7. For delivery agents, verify delivery-path evidence (for example `sent=true`, no fallback) when runtime/channel is available.
 7a. If intake explicitly requested `buttons` or `buttons + commands`, smoke MUST verify inline-button delivery evidence in the target chat/topic:
    - one message-tool send (or agent-generated send) includes inline keyboard payload,
