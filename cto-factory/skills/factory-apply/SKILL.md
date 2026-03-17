@@ -49,3 +49,15 @@ Gateway restart-specific rule:
   5. If no callback is observed within 60s, MUST inspect restart log and post fallback status in current session:
      - `ls -t "$OPENCLAW_ROOT"/logs/cto-gateway-restart-*.log | head -1 | xargs tail -20`
   6. Do NOT use native `gateway` tool `action=restart`.
+
+Post-apply gateway restart (mandatory for workspace-factory changes):
+- If apply includes ANY changes to workspace-factory files — `AGENTS.md`, `SOUL.md`, `PROMPTS.md`, `IDENTITY.md`, `TOOLS.md`, `CODE_AGENT_PROTOCOLS.md`, `SKILL_ROUTING.md`, `skills/*`, `scripts/*` — a gateway restart is MANDATORY after apply.
+  - Rationale: OpenClaw loads agent config at startup. Changes to these files are not picked up until the gateway restarts.
+- Restart sequence:
+  1. Complete the apply (write files, commit if applicable).
+  2. Immediately trigger gateway restart via `factory-gateway-restart` (detached dispatcher, same handshake as above).
+  3. Wait for restart callback confirming `RPC probe OK`.
+  4. Run `factory-smoke` to verify the agent loads the new config correctly.
+  5. Report smoke result to the user.
+- Do NOT mark the task as `DONE` until smoke passes after restart.
+- If smoke fails after restart: do NOT re-restart blindly. Inspect logs, diagnose root cause, report `BLOCKED: POST_RESTART_SMOKE_FAILED`.

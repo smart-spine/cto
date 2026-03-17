@@ -39,16 +39,16 @@ STATUS_RC=$?
 PROBE_OUT="$(run_with_timeout "${TIMEOUT_SECONDS}" openclaw gateway probe 2>&1 || true)"
 PROBE_RC=$?
 
-SERVICE_LINE="$(printf '%s\n' "${STATUS_OUT}" | rg -m1 '^Service:' || true)"
-RUNTIME_LINE="$(printf '%s\n' "${STATUS_OUT}" | rg -m1 '^Runtime:' || true)"
-PROBE_TARGET_LINE="$(printf '%s\n' "${STATUS_OUT}" | rg -m1 '^Probe target:' || true)"
+SERVICE_LINE="$(printf '%s\n' "${STATUS_OUT}" | grep -m1 '^Service:' || true)"
+RUNTIME_LINE="$(printf '%s\n' "${STATUS_OUT}" | grep -m1 '^Runtime:' || true)"
+PROBE_TARGET_LINE="$(printf '%s\n' "${STATUS_OUT}" | grep -m1 '^Probe target:' || true)"
 
 CONNECT_OK=false
 RPC_OK=false
-if printf '%s\n' "${PROBE_OUT}" | rg -q 'Connect: ok'; then
+if printf '%s\n' "${PROBE_OUT}" | grep -q 'Connect: ok'; then
   CONNECT_OK=true
 fi
-if printf '%s\n' "${PROBE_OUT}" | rg -q 'RPC: ok'; then
+if printf '%s\n' "${PROBE_OUT}" | grep -q 'RPC: ok'; then
   RPC_OK=true
 fi
 
