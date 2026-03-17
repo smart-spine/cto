@@ -85,9 +85,22 @@ update_repo_if_enabled() {
     die "Repository has local changes. Commit/stash first or set UPDATE_REPO=false."
   fi
   log_info "Updating deployment repository to ref '${CTO_REPO_REF}'."
+  local branch_before
+  branch_before="$(git -C "${CTO_REPO_ROOT}" rev-parse --abbrev-ref HEAD)"
   git -C "${CTO_REPO_ROOT}" fetch --all --prune
   git -C "${CTO_REPO_ROOT}" checkout "${CTO_REPO_REF}"
   git -C "${CTO_REPO_ROOT}" pull --ff-only origin "${CTO_REPO_REF}"
+  local branch_after
+  branch_after="$(git -C "${CTO_REPO_ROOT}" rev-parse --abbrev-ref HEAD)"
+  if [[ "${branch_before}" != "${branch_after}" ]]; then
+    log_info "Branch changed ${branch_before} → ${branch_after}. Re-executing script with updated code."
+    exec env UPDATE_REPO=false CTO_REPO_REF="${CTO_REPO_REF}" NON_INTERACTIVE="${NON_INTERACTIVE}" \
+      OPENCLAW_HOME="${OPENCLAW_HOME}" CTO_MODEL="${CTO_MODEL}" \
+      FORCE_MODEL_UPDATE="${FORCE_MODEL_UPDATE}" RESTART_GATEWAY="${RESTART_GATEWAY}" \
+      SKIP_CTO_HEALTH_SMOKE="${SKIP_CTO_HEALTH_SMOKE}" \
+      MODEL_PROVIDERS_ALLOWLIST="${MODEL_PROVIDERS_ALLOWLIST}" \
+      bash "${SCRIPT_SOURCE}" "$@"
+  fi
 }
 
 create_backup() {
