@@ -71,7 +71,16 @@ Notes:
 ## 4) CLAUDE_PROTOCOL
 
 Primary non-interactive command path:
-- `claude -p "<prompt>" --output-format text --dangerously-skip-permissions`
+- Short prompts: `claude -p "<prompt>" --output-format text --dangerously-skip-permissions`
+- Large prompts (preferred, avoids shell limits and escaping issues):
+  ```bash
+  _claude_prompt=$(mktemp)
+  cat > "$_claude_prompt" << 'PROMPT_EOF'
+  <prompt text here>
+  PROMPT_EOF
+  claude --output-format text --dangerously-skip-permissions < "$_claude_prompt"
+  rm -f "$_claude_prompt"
+  ```
 
 Recommended flags:
 - `--model claude-sonnet-4-5` (or explicitly requested model)
@@ -82,6 +91,7 @@ Operational rules:
 - For long runs, wrap command with `cto_async_task.py` and heartbeat callbacks.
 - Keep working directory anchored to target root workspace before running Claude CLI.
 - Always use `--dangerously-skip-permissions` to avoid interactive permission prompts blocking execution.
+- NEVER inline large prompts as shell arguments — always use the temp file + stdin pattern above.
 
 ## 5) Sub-Agent Dispatch Protocol
 
