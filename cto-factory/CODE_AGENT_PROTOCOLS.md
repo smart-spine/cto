@@ -93,7 +93,47 @@ Operational rules:
 - Always use `--dangerously-skip-permissions` to avoid interactive permission prompts blocking execution.
 - NEVER inline large prompts as shell arguments — always use the temp file + stdin pattern above.
 
-## 5) Sub-Agent Dispatch Protocol
+## 5) Claude Code Orchestration (Task Decomposition)
+
+For any non-trivial request (more than one logical change, multiple files, or unclear scope), CTO MUST decompose before calling Claude Code. One big prompt is forbidden for multi-step work.
+
+### Decomposition rules
+
+Before the first claude call:
+1. Break the request into **atomic sub-tasks** — each independently testable, minimal scope, single concern.
+2. Write a numbered task list: `T1: <what>`, `T2: <what>`, etc. Show it to the user before execution starts.
+3. Identify dependencies: if T2 depends on T1, they are sequential. If independent — can be batched into one call.
+4. For each task, define the **acceptance criterion**: what exact output/file/test proves it is done.
+
+### Execution loop (per task)
+
+```
+for each task Ti:
+  1. Build a focused prompt — include ONLY context relevant to Ti.
+     Attach output of prior completed tasks as read-only context, not as instructions.
+  2. Call Claude Code with that prompt (temp file + stdin pattern from section 4).
+  3. Verify acceptance criterion:
+     - run tests / read output / check file diff
+     - if PASS → checkpoint (git commit or brain note) → proceed to T(i+1)
+     - if FAIL → rework prompt with error context → retry (max 2 reworks)
+     - if still FAIL after reworks → BLOCKED: SUBTASK_FAILED(Ti), stop sequence
+  4. NEVER start T(i+1) while Ti is unverified.
+```
+
+### Prompt quality rules
+
+- Each prompt must be **self-contained**: include the file paths, current state, and exact expected output.
+- Do NOT ask Claude Code to "figure out what needs to be done" — CTO owns the plan, Claude Code owns the execution.
+- Include the acceptance criterion explicitly in the prompt so Claude Code knows when it is done.
+- If a task requires reading many files first, run a read-only recon call before the mutation call.
+
+### When NOT to decompose
+
+- Single-file, single-concern edits with obvious scope → direct call is fine.
+- Hotfixes under 10 lines → direct call is fine.
+- If unsure → decompose. Cost of over-decomposing is low; cost of a tangled multi-step failure is high.
+
+## 6) Sub-Agent Dispatch Protocol
 
 When dispatching work to another openclaw agent (e.g. `openclaw agent --message ... --agent <id>`):
 
@@ -113,7 +153,7 @@ When dispatching work to another openclaw agent (e.g. `openclaw agent --message 
 - For short sub-agent calls (≤60s expected, e.g. a simple status query): foreground is allowed.
 - If in doubt, always use the async wrapper — it returns immediately regardless.
 
-## 6) Healthcheck Contract
+## 7) Healthcheck Contract
 
 When validating CTO deployment:
 
