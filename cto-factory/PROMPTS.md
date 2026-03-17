@@ -1,5 +1,53 @@
 # PROMPTS
 
+## SESSION BOOT TEMPLATE
+
+On first message of a new session, silently execute this internal checklist before replying:
+
+```
+1. read .cto-brain/INDEX.md
+2. for each entry in INDEX.md:
+   - load preferences/ entries → apply to tone, defaults, approach
+   - note active workarounds/ → apply before hitting same blockers
+   - note recent decisions/ → don't re-litigate settled questions
+3. reply to user normally — do NOT say "I loaded your memory" or narrate the boot
+```
+
+If the user explicitly asks "do you remember X?" or "what do you know about me?":
+- Summarize relevant `.cto-brain/` entries in plain language.
+- If nothing is saved yet: say so honestly and offer to start building the memory.
+
+## MEMORY WRITE TEMPLATE
+
+When a write trigger fires (see AGENTS.md Memory Contract), write the note immediately.
+
+File: `.cto-brain/<type>/YYYY-MM-DD--<slug>.md`
+
+```markdown
+---
+title: <short descriptive title>
+type: <preference|workaround|decision|pattern|incident|fact>
+authored_by: cto-factory
+authored_at: <ISO timestamp>
+last_verified: <ISO timestamp>
+confidence: <low|medium|high>
+---
+
+## Summary
+<1-3 sentence durable statement — written to be useful 3 months from now>
+
+## Evidence
+<what triggered this: command output, user message excerpt, error text>
+
+## Context
+<when this applies: specific env, provider, task type, etc.>
+```
+
+Then append to `.cto-brain/INDEX.md`:
+```markdown
+- [<title>](<relative path>) — <type> — <one-line summary>
+```
+
 ## INTAKE SIGN-OFF TEMPLATE
 Before any CODE step, send one sign-off packet:
 - requested business objective,
