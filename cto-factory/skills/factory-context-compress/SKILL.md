@@ -27,7 +27,7 @@ Output contract:
   - `control_signal: CONTEXT_RESET_TO_SUMMARY_V1`
   - `summary: <compact text>`
 - emit `memory_candidates` array for `factory-memory-garden`, each item:
-  - `type`: one of `fact|decision|pattern|incident|preference|plan`,
+  - `type`: one of `fact|decision|pattern|incident|preference|plan|workaround`,
   - `title`: short stable title,
   - `summary`: concise durable statement,
   - `evidence`: files/commands/tests that support it,

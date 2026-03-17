@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", default=DEFAULT_MODEL, help="Codex model")
     p.add_argument("--prompt-file", help="Path to file with prompt text")
     p.add_argument("--prompt", help="Inline prompt text")
-    p.add_argument("--retries", type=int, default=5, help="Max attempts")
+    p.add_argument("--retries", type=int, default=3, help="Max attempts")
     p.add_argument("--timeout", type=int, default=10800, help="Per-attempt timeout (seconds)")
     p.add_argument("--backoff", type=float, default=2.0, help="Base backoff seconds")
     p.add_argument(

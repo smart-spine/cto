@@ -71,20 +71,89 @@ Notes:
 ## 4) CLAUDE_PROTOCOL
 
 Primary non-interactive command path:
-- `claude -p "<prompt>" --output-format text --permission-mode default`
+- Short prompts: `claude -p "<prompt>" --output-format text --dangerously-skip-permissions`
+- Large prompts (preferred, avoids shell limits and escaping issues):
+  ```bash
+  _claude_prompt=$(mktemp)
+  cat > "$_claude_prompt" << 'PROMPT_EOF'
+  <prompt text here>
+  PROMPT_EOF
+  claude --output-format text --dangerously-skip-permissions < "$_claude_prompt"
+  rm -f "$_claude_prompt"
+  ```
 
 Recommended flags:
-- `--model claude-sonnet-4-5` (or explicitly requested model)
+- `--model claude-opus-4-6` (default; fallback to `claude-sonnet-4-5` if opus unavailable)
 - `--effort medium|high` for complex tasks
 
 Operational rules:
 - Use same `PLAN -> IMPLEMENT -> AUDIT` contract and same JSON markers.
 - For long runs, wrap command with `cto_async_task.py` and heartbeat callbacks.
 - Keep working directory anchored to target root workspace before running Claude CLI.
-- NEVER use `--permission-mode bypassPermissions` or `--dangerously-skip-permissions` in this workflow.
-- If a command contains forbidden permission flags, rerun with `--permission-mode default` and continue delegation flow.
+- Always use `--dangerously-skip-permissions` to avoid interactive permission prompts blocking execution.
+- NEVER inline large prompts as shell arguments — always use the temp file + stdin pattern above.
 
-## 5) Healthcheck Contract
+## 5) Claude Code Orchestration (Task Decomposition)
+
+For any non-trivial request (more than one logical change, multiple files, or unclear scope), CTO MUST decompose before calling Claude Code. One big prompt is forbidden for multi-step work.
+
+### Decomposition rules
+
+Before the first claude call:
+1. Break the request into **atomic sub-tasks** — each independently testable, minimal scope, single concern.
+2. Write a numbered task list: `T1: <what>`, `T2: <what>`, etc. Show it to the user before execution starts.
+3. Identify dependencies: if T2 depends on T1, they are sequential. If independent — can be batched into one call.
+4. For each task, define the **acceptance criterion**: what exact output/file/test proves it is done.
+
+### Execution loop (per task)
+
+```
+for each task Ti:
+  1. Build a focused prompt — include ONLY context relevant to Ti.
+     Attach output of prior completed tasks as read-only context, not as instructions.
+  2. Call Claude Code with that prompt (temp file + stdin pattern from section 4).
+  3. Verify acceptance criterion:
+     - run tests / read output / check file diff
+     - if PASS → checkpoint (git commit or brain note) → proceed to T(i+1)
+     - if FAIL → rework prompt with error context → retry (max 2 reworks)
+     - if still FAIL after reworks → BLOCKED: SUBTASK_FAILED(Ti), stop sequence
+  4. NEVER start T(i+1) while Ti is unverified.
+```
+
+### Prompt quality rules
+
+- Each prompt must be **self-contained**: include the file paths, current state, and exact expected output.
+- Do NOT ask Claude Code to "figure out what needs to be done" — CTO owns the plan, Claude Code owns the execution.
+- Include the acceptance criterion explicitly in the prompt so Claude Code knows when it is done.
+- If a task requires reading many files first, run a read-only recon call before the mutation call.
+
+### When NOT to decompose
+
+- Single-file, single-concern edits with obvious scope → direct call is fine.
+- Hotfixes under 10 lines → direct call is fine.
+- If unsure → decompose. Cost of over-decomposing is low; cost of a tangled multi-step failure is high.
+
+## 6) Sub-Agent Dispatch Protocol
+
+When dispatching work to another openclaw agent (e.g. `openclaw agent --message ... --agent <id>`):
+
+- Direct foreground `openclaw agent --message` calls are FORBIDDEN for any task expected to take >60 seconds.
+- ALL sub-agent dispatches MUST use the async dispatcher wrapper:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_dispatch_agent.py" \
+    --agent <id> \
+    --message "<task description>" \
+    --session-id "${CTO_SESSION_ID:-${OPENCLAW_SESSION_ID:-}}"
+  ```
+- The wrapper returns `task_id` immediately. CTO receives heartbeat callbacks every 60 seconds.
+- On `ASYNC_TASK_COMPLETE` callback: tail the log to read the sub-agent's output:
+  ```
+  python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_async_task.py" tail --task-id <id> --lines 60
+  ```
+- For short sub-agent calls (≤60s expected, e.g. a simple status query): foreground is allowed.
+- If in doubt, always use the async wrapper — it returns immediately regardless.
+
+## 7) Healthcheck Contract
 
 When validating CTO deployment:
 

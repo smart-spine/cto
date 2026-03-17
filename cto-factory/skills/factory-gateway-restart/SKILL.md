@@ -59,9 +59,15 @@ Reporting requirements:
 - include where to inspect logs:
   - `$OPENCLAW_ROOT/logs/cto-gateway-restart-*.log`.
 
+Why detached mode is mandatory:
+- The gateway process hosts the active CTO session. A blocking restart (`openclaw gateway restart` in foreground) terminates the gateway mid-execution, which kills CTO's own session immediately — CTO cannot send any response after that. Detached mode (`nohup ... &`) lets the gateway restart independently while CTO survives to send the callback and report the result.
+
 Forbidden:
 - pre-acknowledgement without tool execution in the same assistant turn,
 - text-only completion for an imperative restart request,
 - native `gateway` tool call with `action="restart"` (must use detached dispatcher command),
 - direct blocking `openclaw gateway restart` without detached callback flow,
-- restart command chaining in one step (for example `openclaw gateway restart && openclaw gateway status`).
+- restart command chaining in one step (for example `openclaw gateway restart && openclaw gateway status`),
+- triggering a second restart if the first dispatcher was already launched — even if no callback arrives within 60s. One dispatcher launch = one restart attempt. If callback is absent: inspect logs, report to user, and WAIT. Do NOT re-dispatch.
+- inferring restart failure from partial log output or missing callback alone — absence of callback within 60s is ambiguous (gateway may still be booting). Always inspect the log before concluding failure.
+- any restart attempt without first dispatching via `gateway-restart-callback.sh` — there is no safe manual alternative that preserves the session.

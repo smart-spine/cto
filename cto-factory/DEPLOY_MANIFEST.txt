@@ -10,6 +10,7 @@ SOUL.md
 TOOLS.md
 USER.md
 scripts/cto_code_agent_memory.py
+scripts/cto_dispatch_agent.py
 scripts/codex_guarded_exec.py
 scripts/cto_agent_artifact_gate.py
 scripts/cto_apply_state.py
