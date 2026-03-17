@@ -43,6 +43,19 @@ Procedure:
    - `<agent_workspace>/PROMPTS.md` should mention skill routing expectation,
    - `<agent_workspace>/TOOLS.md` should not contradict skill responsibilities.
 
+6. **Skill invocation test (mandatory — do not skip)**:
+   For each skill created or modified in this run:
+   - Identify the trigger phrase from `SKILL_INDEX.md` or the skill's own description.
+   - Send it to the target agent to confirm the skill actually executes:
+     - Short-running / tool-based skill:
+       `timeout 60 openclaw agent --agent <id> --message "<trigger phrase>" --json`
+     - LLM-backed or long-running skill:
+       `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_dispatch_agent.py" --agent <id> --message "<trigger phrase>"`
+   - PASS: the response demonstrates the skill's intended behavior — not a generic fallback or "I don't understand".
+   - FAIL: return to step 3 (Codex delegation), fix the skill implementation, and retest before proceeding.
+   - If the agent is not yet registered in `openclaw.json` (new agent pending apply):
+     mark as `BLOCKED: REQUIRES_APPLY_FIRST` and flag this test as a mandatory post-apply check in the handoff packet.
+
 Contradiction rules:
 - one intent must not map to multiple different primary skills,
 - skill instructions must not claim unavailable tools,
