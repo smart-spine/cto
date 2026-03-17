@@ -22,8 +22,11 @@ Required layout:
 - `.cto-brain/plans/completed/`
 - `.cto-brain/archive/`
 
-Input:
-- `memory_candidates` from `factory-context-compress`.
+Input (two modes):
+- **Triggered mode** (proactive, during work): a single memory candidate triggered by a write event — user correction, workaround found, decision made. Write immediately without waiting for session end.
+- **Batch mode** (session end / context compress): `memory_candidates` list from `factory-context-compress`.
+
+Memory writes are exempt from code-agent delegation. Write note files directly using `exec` or `write` tool — these are operational state, not project mutations.
 
 Mapping rules:
 - `fact` -> `facts/`
