@@ -39,9 +39,25 @@ Procedure:
    - run deterministic gate:
      - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace <agent_workspace>`
    - if gate fails, fix and rerun until green.
-5. Ensure agent profile references skill package behavior:
-   - `<agent_workspace>/PROMPTS.md` should mention skill routing expectation,
-   - `<agent_workspace>/TOOLS.md` should not contradict skill responsibilities.
+5. **Skill documentation (mandatory — hard gate, not a suggestion)**:
+   For each skill created or modified, the following MUST be present before proceeding:
+
+   a. `SKILL_INDEX.md` entry for this skill MUST contain:
+      - `path: skills/<skill-name>/SKILL.md` — exact relative path,
+      - `triggers:` — at least 2–3 realistic user phrases or commands that route to this skill,
+      - `description:` — one-line summary of what the skill does.
+
+   b. Agent's `PROMPTS.md` MUST contain an explicit skill routing section that:
+      - names each available skill,
+      - states the intent it handles ("when the user asks X → use skill Y"),
+      - references the skill by name and path, not by general guidance.
+
+   c. Agent's `AGENTS.md` or `README.md` MUST include a "Skills" section listing:
+      - each skill name, its path, and a one-sentence usage description,
+      - the trigger command or phrase a user would send to invoke it.
+
+   If any of (a), (b), or (c) is missing or incomplete: add the missing content immediately.
+   Do NOT proceed to step 6 until this check is green.
 
 6. **Skill invocation test (mandatory — do not skip)**:
    For each skill created or modified in this run:
