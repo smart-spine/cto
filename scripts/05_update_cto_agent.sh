@@ -153,6 +153,14 @@ sync_workspace_files() {
     log_warn "Source .cto-brain not found (expected when git-ignored). Existing target memory preserved."
   fi
 
+  # Ensure .cto-brain/INDEX.md exists — missing file causes ENOENT on every session boot
+  local brain_index="${target_workspace}/.cto-brain/INDEX.md"
+  if [[ ! -f "${brain_index}" ]]; then
+    ensure_dir "${target_workspace}/.cto-brain"
+    touch "${brain_index}"
+    log_info "Created missing .cto-brain/INDEX.md (was absent, caused ENOENT on session start)."
+  fi
+
   verify_manifest_paths "${target_workspace}" "target"
 }
 
