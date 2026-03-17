@@ -83,7 +83,7 @@ Primary non-interactive command path:
   ```
 
 Recommended flags:
-- `--model claude-sonnet-4-5` (or explicitly requested model)
+- `--model claude-opus-4-6` (default; fallback to `claude-sonnet-4-5` if opus unavailable)
 - `--effort medium|high` for complex tasks
 
 Operational rules:
