@@ -1,6 +1,6 @@
 ---
 name: factory-smoke
-description: Run post-apply sanity checks and confirm expected artifacts are operational.
+description: Run pre-apply functional smoke (prove behavior before live mutation) and post-apply sanity checks (confirm operational artifacts after apply).
 ---
 
 Smoke checks should be quick and deterministic.

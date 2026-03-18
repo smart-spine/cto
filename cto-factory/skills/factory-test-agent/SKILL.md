@@ -173,6 +173,9 @@ Automation helper:
 - use the session runner for repeatable multi-session evaluation:
   - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_qa_suite_v2.py" --workdir "$OPENCLAW_ROOT" --agent cto-factory`
 - runner output:
-  - `summary.json` with pass/fail across 8 sessions,
+  - `summary.json` with pass/fail across 8 automated sessions,
   - per-session full transcript `.txt`,
   - per-session raw JSON records.
+- coverage note: the 8 automated sessions cover scenarios 2, 4, 5, 6, 7, 8, 11, 15, 16 from the catalog above.
+  Scenarios 1, 9, 10, 12, 13, 14, 17, 18, 19 require specialized environments (real delivery channel, fault injection,
+  disk-full simulation) and must be verified manually or via dedicated test infrastructure before release sign-off.

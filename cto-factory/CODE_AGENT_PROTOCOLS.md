@@ -67,6 +67,7 @@ Notes:
 - Never run `codex exec` naked in normal flow.
 - Never run recursive codex calls inside delegated worker prompt.
 - Keep `codex_guarded_exec.py --sandbox auto` default to allow Landlock fallback handling.
+- Sandbox auto-escalation is visible: when `auto` escalates from `workspace-write` to `danger-full-access` due to a Landlock failure, a `[codex-guard] detected Landlock sandbox failure; switching sandbox to danger-full-access` message is printed to stderr and the active sandbox mode is recorded in the run trace (`"sandbox"` field per attempt). Check report output if escalation is unexpected.
 
 ## 4) CLAUDE_PROTOCOL
 
