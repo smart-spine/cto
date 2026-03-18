@@ -13,7 +13,7 @@ Minimum extraction rules:
    - What is the **target artifact** (agent name, config file, tool file)?
    - What is the **desired outcome** (new behavior, fix, removal)?
    - Are there any **constraints** the user mentioned (timeline, tech stack, provider)?
-4. If the task is "build/create a new agent", this skill MUST hand off to `INTAKE_SURVEY` (defined in `PROMPTS.md`) before proceeding.
+4. If the task is "build/create a new agent", this skill MUST hand off to `INTAKE SIGN-OFF TEMPLATE` (defined in `PROMPTS.md`) before proceeding.
 4a. For "build/create new agent" tasks, do not enter CODE until critical inputs are confirmed (or explicitly defaulted and acknowledged):
    - destination/channel binding,
    - schedule/trigger policy,
