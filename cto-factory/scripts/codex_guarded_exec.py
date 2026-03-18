@@ -104,16 +104,11 @@ def normalize_model_id(requested_model: str) -> tuple[str, str | None]:
     normalized = requested.split("/")[-1].strip()
     warning_parts: list[str] = []
 
-    if normalized != requested:
-        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
-
     if not normalized or not MODEL_TOKEN_RE.match(normalized):
         warning_parts.append(f"invalid model token '{normalized}'")
         normalized = DEFAULT_MODEL
         warning_parts.append(f"fallback to '{DEFAULT_MODEL}'")
 
-    if normalized != requested and not warning_parts:
-        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
     warning = "; ".join(warning_parts) if warning_parts else None
     return normalized, warning
 
@@ -462,7 +457,6 @@ def main() -> int:
     # Allow long-running Codex jobs (multi-hour) without clamping upper bounds.
     # Some legacy callers still pass --timeout 900; treat that as too small and lift to a long floor.
     args.retries = max(1, args.retries)
-    args.timeout = max(10800, args.timeout)
     prompt = load_prompt(args)
     requested_model = args.model
     resolved_model, model_warning = normalize_model_id(requested_model)
