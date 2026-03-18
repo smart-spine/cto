@@ -15,7 +15,7 @@ def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def run_cmd(cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> subprocess.CompletedProcess[str]:
+def run_cmd(cmd: list[str], cwd: Path | None = None, env: dict | None = None, timeout: int = 300) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -23,6 +23,7 @@ def run_cmd(cmd: list[str], cwd: Path | None = None, env: dict | None = None) ->
         text=True,
         capture_output=True,
         check=False,
+        timeout=timeout,
     )
 
 
