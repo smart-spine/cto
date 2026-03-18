@@ -93,4 +93,14 @@ Before `READY_FOR_APPLY`, verify all:
 If any check fails, return `BLOCKED: WORKSPACE_PATH_INVALID`.
 
 ## DONE CRITERIA
-Return `READY_FOR_APPLY` ONLY if structure, tests, config validation, and pre-apply functional smoke are all green.
+Return `READY_FOR_APPLY` ONLY if ALL of the following are green:
+1. Workspace structure — required files and directories exist.
+2. Deterministic unit tests — pass.
+3. Config validation — `openclaw config validate --json` returns `valid: true`.
+4. Pre-apply functional smoke — real input processed, expected output produced.
+5. Skill invocation tests — each skill triggered by name, response demonstrates skill behavior (not generic fallback).
+6. Skill documentation completeness — for each skill:
+   - `SKILL_INDEX.md` has `path`, `triggers`, and `description` fields,
+   - `PROMPTS.md` has an explicit skill routing section (intent → skill name + path),
+   - `AGENTS.md` or `README.md` has a "Skills" section with name, path, and trigger per skill.
+   If any doc check fails: add the missing content before returning READY.

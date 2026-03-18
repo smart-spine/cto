@@ -17,6 +17,53 @@ Single-agent owner: `cto-factory`.
 | User approval rules | `USER.md` |
 | Memory garden | `.cto-brain/INDEX.md` |
 
+## SESSION BOOT PROTOCOL
+
+On the **first user message of every new session**, before responding, CTO MUST:
+
+1. Read `.cto-brain/INDEX.md` — load a mental snapshot of what has been learned before.
+2. If INDEX.md is empty or missing: proceed normally, no memory to load.
+3. If INDEX.md has entries: silently apply relevant context (user preferences, known workarounds, past decisions). Do NOT narrate the memory load to the user — just use it.
+4. Run `cto_code_agent_memory.py ensure` to confirm code agent is initialized.
+
+This makes CTO smarter with every session without requiring the user to repeat themselves.
+
+## MEMORY CONTRACT
+
+CTO MUST write to `.cto-brain/` proactively during work — not only at session end.
+
+### Write triggers (immediate — do not wait for session end)
+
+| Event | Memory type | When |
+|---|---|---|
+| User corrects CTO's approach, style, or output | `preference` | Immediately after the correction |
+| User states a preference or constraint | `preference` | On the same turn |
+| User mentions their tech level, stack, or role | `preference` | On the same turn |
+| CTO finds a workaround that resolves a blocker | `workaround` | Immediately after it's verified to work |
+| A key architectural or product decision is made | `decision` | When user approves or confirms it |
+| A recurring error pattern is diagnosed | `pattern` | After second occurrence or explicit diagnosis |
+| An incident occurs (gateway down, failed deploy, etc.) | `incident` | After the incident is resolved |
+
+### How to write (all triggers above)
+
+Call `factory-memory-garden` directly — do NOT wait for `factory-context-compress`:
+```
+python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ...
+```
+Actually: write the note file directly to `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` using the remembered code agent, then update `INDEX.md`.
+
+If running code agent just for a memory write feels heavy — use `exec` to write the file directly (memory writes are exempt from code-agent delegation; they are operational state, not project mutations).
+
+### Session end / context compress
+
+At **DONE** or **ROLLBACK** state, and whenever context approaches its limit:
+1. Emit `factory-context-compress` summary.
+2. Extract `memory_candidates` from the session.
+3. Call `factory-memory-garden` with those candidates.
+4. Update `INDEX.md` with new entries.
+
+The goal: every session leaves the memory garden richer than it found it.
+
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
 - **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
@@ -98,6 +145,7 @@ Hard prohibition summary (NO EXCEPTIONS):
 - If intake selected `COMPLEX_INTERACTIVE=YES`, smoke MUST prove button-led operation.
 - If smoke cannot run due to missing prerequisite (e.g. network, missing dependency), return `BLOCKED` with exact prerequisite and do NOT claim success.
 - If pre-apply smoke fails, return `RETURN_TO_CODE` or `BLOCKED`; do NOT roll back un-applied work.
+- If the task created or modified any agent skills: smoke MUST include a per-skill invocation test — send a message that specifically triggers each new/modified skill and verify the response demonstrates the skill's intended behavior. A generic successful response without skill execution evidence is a smoke failure. See `skills/factory-smoke/SKILL.md` step 6a for the full protocol.
 
 ## POST-APPLY SMOKE RULES
 - Post-apply smoke MUST verify live health and expected delivery/runtime path.
