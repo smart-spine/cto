@@ -73,6 +73,7 @@ The goal: every session leaves the memory garden richer than it found it.
 - **CODE**: Implement changes under delegation rules (→ `CODE_AGENT_PROTOCOLS.md`).
 - **TEST**: Run deterministic tests.
 - **CONFIG_QA**: Run `openclaw config validate --json` and parse errors.
+- **COHERENCE_REVIEW (PRE-APPLY, MANDATORY when agent files were created or modified)**: Read ALL agent profile files together as a system and fix contradictions, dead references, duplicate rules, bloated content, and unclear instructions. Max 3 iterations. See Coherence Review Rules below.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
 - **USAGE_PREVIEW (PRE-APPLY, MANDATORY)**: Show exactly how the user will use the result after apply (entrypoint, commands/buttons, destination/binding).
 - **CONTEXT_COMPRESS**: Save concise execution context.
@@ -83,7 +84,7 @@ The goal: every session leaves the memory garden richer than it found it.
 
 This is a state machine, NOT a rigid linear script.
 - You MAY skip non-critical states in lean paths.
-- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
+- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `COHERENCE_REVIEW (PRE-APPLY)`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
 - You MUST NEVER enter `CODE` without explicit user sign-off (`YES` or unambiguous approval text).
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
@@ -156,6 +157,50 @@ Hard prohibition summary (NO EXCEPTIONS):
 - Rollback path MUST be valid before apply.
 - Work strictly inside allowed workspace scope.
 - No fake capability claims.
+
+## COHERENCE REVIEW RULES
+
+Trigger: any task where agent profile files were created or modified
+(`IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md`, `README.md`,
+`SKILL_ROUTING.md`, `SKILL_INDEX.md`, `skills/*/SKILL.md`).
+
+**Goal**: catch issues that arise from writing files in isolation — contradictions,
+dead references, duplicated rules, bloated content, unclear directives.
+
+**Procedure (max 3 iterations)**:
+
+For each iteration:
+1. Read ALL agent profile files together as a complete set (not one by one).
+2. For each file, check against every other file for:
+   - **Contradictions**: rule in file A directly conflicts with rule in file B
+     (e.g., TOOLS.md forbids X, SKILL.md requires X).
+   - **Dead references**: mentions a skill, tool, file, or command that does not exist.
+   - **Duplicate rules**: same instruction stated in 2+ places with diverging wording
+     (pick the canonical location, remove redundant copies).
+   - **Bloated sections**: content that adds no unique value beyond what another file
+     already says — consolidate or remove.
+   - **Ambiguous directives**: instruction that can be interpreted two valid ways —
+     rewrite to be unambiguous.
+   - **Orphaned content**: a section that no longer connects to any other file or
+     runtime behaviour — remove or archive.
+   - **Scope violations**: a skill's SKILL.md claims an intent that another skill
+     already owns as primary — resolve ownership.
+3. Fix every issue found in this iteration.
+4. If zero issues found → gate PASSES, stop iterating.
+5. If issues remain after 3 iterations → report residual issues with justification
+   and let user decide before returning READY.
+
+**Report format** (include in final task report):
+```
+## Coherence Review
+- Iteration 1: N issues found — [brief list of fixes]
+- Iteration 2: M issues found — [brief list of fixes]
+- Iteration 3: K issues found — [brief list of fixes]
+- Final state: CLEAN  (or: RESIDUAL ISSUES — [list with justification])
+```
+
+Self-reported "no issues" without having read all files is a protocol violation.
+Evidence must show which files were read and what was checked.
 
 ## COMMUNICATION CONTRACT
 - Use `PLAN → ACT → OBSERVE → REACT`.

@@ -18,11 +18,58 @@ Output contract:
 - create/update `<agent_workspace>/skills/SKILL_INDEX.md`,
 - create/update at least one concrete skill folder:
   - `<agent_workspace>/skills/<skill-name>/SKILL.md`
+- **upsert `<agent_workspace>/SKILL_ROUTING.md`** — agent-scoped routing matrix (see Upsert Protocol below),
 - ensure each generated skill has valid frontmatter:
   - `name`
   - `description`
 - ensure routing matrix maps each intent to one primary skill.
 - ensure `SKILL_INDEX.md` contains an explicit anti-overlap rule that forbids multiple primary skills for the same intent.
+
+## SKILL_ROUTING.md — Upsert Protocol (mandatory after every skill create/update/delete)
+
+**UPSERT, never overwrite blindly:**
+- If `SKILL_ROUTING.md` does NOT exist → create it from the template below.
+- If `SKILL_ROUTING.md` already exists → patch it:
+  - ADD rows for new skills (one row per new intent),
+  - REMOVE rows whose skill file no longer exists (orphan rows),
+  - UPDATE rows for modified skills if trigger phrases or intent changed,
+  - PRESERVE all existing rows that remain valid.
+
+Required format:
+
+```markdown
+# Skill Routing Matrix
+
+## Routing Table
+
+| Intent | Primary skill | Trigger phrases | Do not use |
+|---|---|---|---|
+| <user intent> | `<skill-name>` | "<phrase1>", "<phrase2>" | <conflicting approach> |
+
+## Skill Selection Rules
+
+1. <agent-specific rule per skill>
+2. Never invoke two primary skills for the same intent simultaneously.
+3. If intent is ambiguous, prefer the skill with the more specific trigger match.
+
+## Evidence Requirements
+
+Each invocation must confirm which skill handled the request and why.
+```
+
+Rules for the routing table:
+- one row per distinct user intent,
+- `Trigger phrases` must be realistic user messages (2–3 examples per intent),
+- `Do not use` must name the anti-pattern or conflicting skill — never leave blank.
+
+After upserting `SKILL_ROUTING.md`, verify the agent's `README.md` or `AGENTS.md` has a Skills section:
+```markdown
+## Skills
+
+Skill routing rules and intent-to-skill mapping: [SKILL_ROUTING.md](SKILL_ROUTING.md)
+Full skill inventory: [skills/SKILL_INDEX.md](skills/SKILL_INDEX.md)
+```
+If the section is missing or stale, update it.
 
 Procedure:
 1. Gather skill-use cases from current agent scope:
@@ -39,18 +86,61 @@ Procedure:
    - run deterministic gate:
      - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_skill_consistency_gate.py" --workspace <agent_workspace>`
    - if gate fails, fix and rerun until green.
-5. **Skill documentation (mandatory — hard gate, not a suggestion)**:
-   For each skill created or modified, the following MUST be present before proceeding:
 
-   a. `SKILL_INDEX.md` entry for this skill MUST contain:
+4a. **Full Skill Coverage Gate (mandatory — run after EVERY skill create/update/delete)**:
+
+   This gate checks ALL skills in the workspace, not just the ones modified in this run.
+   A skill can silently fall out of routing when a new skill is added around it.
+
+   Step-by-step:
+
+   i. **Enumerate** all skill files:
+      `ls <agent_workspace>/skills/*/SKILL.md`
+      Build a list: `ALL_SKILLS = [skill-name-1, skill-name-2, ...]`
+
+   ii. **Check SKILL_ROUTING.md coverage** — for each skill in `ALL_SKILLS`:
+      - verify a row exists in the Routing Table with `Primary skill = skill-name`,
+      - if any skill is missing → add its row now (do not skip, do not defer).
+
+   iii. **Check for orphan rows** — for each row in `SKILL_ROUTING.md`:
+      - verify the referenced skill file exists at `skills/<skill-name>/SKILL.md`,
+      - if the file is gone → remove the row.
+
+   iv. **Check SKILL_INDEX.md coverage** — for each skill in `ALL_SKILLS`:
+      - verify an entry exists with `path`, `triggers`, and `description` fields,
+      - if any skill is missing or incomplete → add/fix the entry.
+
+   v. **Check PROMPTS.md coverage** — verify the routing section mentions ALL skills by name:
+      - if any skill is absent → add it to the routing section with its intent.
+
+   vi. **Check README/AGENTS.md Skills section** — verify it lists ALL skills:
+      - if any skill is absent → update the section.
+
+   vii. **Contradiction scan across ALL skills**:
+      - no two rows in `SKILL_ROUTING.md` may assign the same intent to different primary skills,
+      - no skill's `SKILL.md` may instruct behaviour that contradicts another skill's `SKILL.md`,
+      - if contradictions found → resolve before proceeding (update routing or skill instructions).
+
+   Gate result: PASS only when all seven checks are green for ALL skills.
+   If any check fails → fix immediately, then re-run the gate from step i.
+
+4b. **Coherence Review — all agent files (mandatory, max 3 iterations)**:
+   After any skill create/update, read ALL agent profile files together and apply
+   the full Coherence Review checklist from `AGENTS.md`.
+   Do NOT proceed to step 5 until review passes or residual issues are reported.
+
+5. **Skill documentation (mandatory — hard gate)**:
+   For each skill created or modified, the following MUST be present:
+
+   a. `SKILL_INDEX.md` entry MUST contain:
       - `path: skills/<skill-name>/SKILL.md` — exact relative path,
-      - `triggers:` — at least 2–3 realistic user phrases or commands that route to this skill,
-      - `description:` — one-line summary of what the skill does.
+      - `triggers:` — at least 2–3 realistic user phrases or commands,
+      - `description:` — one-line summary.
 
    b. Agent's `PROMPTS.md` MUST contain an explicit skill routing section that:
       - names each available skill,
       - states the intent it handles ("when the user asks X → use skill Y"),
-      - references the skill by name and path, not by general guidance.
+      - references the skill by name and path.
 
    c. Agent's `AGENTS.md` or `README.md` MUST include a "Skills" section listing:
       - each skill name, its path, and a one-sentence usage description,
@@ -82,4 +172,5 @@ Contradiction rules:
 Reporting requirements:
 - list created/updated skill files,
 - include consistency gate command + exit code,
+- include Full Skill Coverage Gate result (pass/fail per check),
 - include any resolved contradictions.
