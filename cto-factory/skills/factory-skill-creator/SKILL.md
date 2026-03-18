@@ -124,9 +124,8 @@ Procedure:
    Gate result: PASS only when all seven checks are green for ALL skills.
    If any check fails → fix immediately, then re-run the gate from step i.
 
-4b. **Coherence Review — all agent files (mandatory, max 3 iterations)**:
-   After any skill create/update, read ALL agent profile files together and apply
-   the full Coherence Review checklist from `AGENTS.md`.
+4b. **Coherence Review (mandatory)**:
+   Invoke `factory-coherence-review` with this agent's workspace.
    Do NOT proceed to step 5 until review passes or residual issues are reported.
 
 5. **Skill documentation (mandatory — hard gate)**:

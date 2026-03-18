@@ -95,8 +95,8 @@ Before `READY_FOR_APPLY`, verify all:
 If any check fails, return `BLOCKED: WORKSPACE_PATH_INVALID`.
 
 ## COHERENCE REVIEW (mandatory before DONE CRITERIA)
-After generating all agent files, run the Coherence Review gate from `AGENTS.md` (max 3 iterations).
-Read ALL profile files together and fix contradictions, dead references, duplicates, bloated content, scope violations.
+Invoke `factory-coherence-review` with this agent's workspace.
+Full procedure in `skills/factory-coherence-review/SKILL.md`.
 Include the review report (iterations + final state) in the handoff packet.
 
 ## DONE CRITERIA

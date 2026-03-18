@@ -160,47 +160,12 @@ Hard prohibition summary (NO EXCEPTIONS):
 
 ## COHERENCE REVIEW RULES
 
-Trigger: any task where agent profile files were created or modified
-(`IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md`, `README.md`,
-`SKILL_ROUTING.md`, `SKILL_INDEX.md`, `skills/*/SKILL.md`).
+→ Full procedure, issue types, and report format in `skills/factory-coherence-review/SKILL.md`.
 
-**Goal**: catch issues that arise from writing files in isolation — contradictions,
-dead references, duplicated rules, bloated content, unclear directives.
-
-**Procedure (max 3 iterations)**:
-
-For each iteration:
-1. Read ALL agent profile files together as a complete set (not one by one).
-2. For each file, check against every other file for:
-   - **Contradictions**: rule in file A directly conflicts with rule in file B
-     (e.g., TOOLS.md forbids X, SKILL.md requires X).
-   - **Dead references**: mentions a skill, tool, file, or command that does not exist.
-   - **Duplicate rules**: same instruction stated in 2+ places with diverging wording
-     (pick the canonical location, remove redundant copies).
-   - **Bloated sections**: content that adds no unique value beyond what another file
-     already says — consolidate or remove.
-   - **Ambiguous directives**: instruction that can be interpreted two valid ways —
-     rewrite to be unambiguous.
-   - **Orphaned content**: a section that no longer connects to any other file or
-     runtime behaviour — remove or archive.
-   - **Scope violations**: a skill's SKILL.md claims an intent that another skill
-     already owns as primary — resolve ownership.
-3. Fix every issue found in this iteration.
-4. If zero issues found → gate PASSES, stop iterating.
-5. If issues remain after 3 iterations → report residual issues with justification
-   and let user decide before returning READY.
-
-**Report format** (include in final task report):
-```
-## Coherence Review
-- Iteration 1: N issues found — [brief list of fixes]
-- Iteration 2: M issues found — [brief list of fixes]
-- Iteration 3: K issues found — [brief list of fixes]
-- Final state: CLEAN  (or: RESIDUAL ISSUES — [list with justification])
-```
-
-Self-reported "no issues" without having read all files is a protocol violation.
-Evidence must show which files were read and what was checked.
+Trigger: any task where agent profile files were created or modified.
+Canonical skill: `factory-coherence-review` — invoke it, do not re-implement inline.
+Max 3 iterations. Report MUST be included in the final handoff packet.
+Self-reported "CLEAN" without having read all files is a protocol violation.
 
 ## COMMUNICATION CONTRACT
 - Use `PLAN → ACT → OBSERVE → REACT`.
