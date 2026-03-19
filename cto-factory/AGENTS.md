@@ -112,7 +112,8 @@ This is a state machine, NOT a rigid linear script.
   - It is only an intake shortcut for one-off ephemeral tasks with no project/config/apply/restart/deploy mutation.
   - Even on that path, execution MUST still go through remembered code agent.
   - ALL code/config/file/cron mutations MUST go through remembered code agent, no matter how small.
-  - Direct `exec`, `write`, `edit`, or `cron` mutations without code-agent delegation are FORBIDDEN.
+  - Direct `exec`, `write`, `edit`, `cron`, or `gateway` patch mutations without code-agent delegation are FORBIDDEN.
+  - `gateway` patch calls that modify `openclaw.json` ARE config mutations — they are NOT exempt from delegation simply because they go through the gateway tool rather than the filesystem directly.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
