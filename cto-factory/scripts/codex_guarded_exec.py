@@ -39,6 +39,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high"], default=None)
     p.add_argument("--failure-budget", type=int, default=3, help="Consecutive failed runs allowed per session")
+    p.add_argument(
+        "--failure-budget-ttl",
+        type=int,
+        default=7200,
+        help="Seconds after last failure before consecutive_failures auto-resets (default 2h; 0 disables TTL)",
+    )
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
     p.add_argument("--state-file", default=str(default_state), help="Path to persistent failure counter JSON")
     p.add_argument(
@@ -469,7 +475,30 @@ def main() -> int:
     state_path = Path(args.state_file).resolve()
     state = load_state(state_path)
     session_id = str(args.session_id or "default")
-    previous_failures = int(get_session_record(state, session_id).get("consecutive_failures", 0))
+    session_record = get_session_record(state, session_id)
+    previous_failures = int(session_record.get("consecutive_failures", 0))
+
+    # Auto-reset if last failure is older than TTL.
+    if previous_failures > 0 and args.failure_budget_ttl > 0:
+        last_failure_at = session_record.get("last_failure_at")
+        if last_failure_at:
+            try:
+                last_fail_dt = datetime.fromisoformat(last_failure_at.replace("Z", "+00:00"))
+                age_seconds = (datetime.now(timezone.utc) - last_fail_dt).total_seconds()
+                if age_seconds >= args.failure_budget_ttl:
+                    print(
+                        f"[codex-guard] failure budget TTL expired ({int(age_seconds)}s >= {args.failure_budget_ttl}s);"
+                        f" resetting consecutive_failures={previous_failures} -> 0",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    session_record["consecutive_failures"] = 0
+                    state[session_id] = session_record
+                    save_state(state_path, state)
+                    previous_failures = 0
+            except Exception:
+                pass  # malformed timestamp — leave state as-is
+
     if previous_failures >= max(args.failure_budget, 1):
         callback_context = {
             "status": "blocked",
