@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,6 +68,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--callback-message",
         help="Optional callback message template. Supports {status}, {exit_code}, {used_attempts}, {session_id}.",
+    )
+    p.add_argument(
+        "--session-heartbeat-interval",
+        type=int,
+        default=300,
+        help="Send a live heartbeat message to the CTO session every N seconds while codex runs (0 disables; default 5m).",
     )
     return p.parse_args()
 
@@ -165,8 +172,8 @@ class _SafeFormatDict(dict):
 
 def render_callback_message(template: str | None, context: dict) -> str:
     default_template = (
-        "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}. "
-        "session_id={session_id}"
+        "CODEX_DONE status={status} exit_code={exit_code} used_attempts={used_attempts} session_id={session_id}. "
+        "Resume task now: evaluate this result, run tests, run smoke, and report outcome to the user."
     )
     text = template or default_template
     try:
@@ -339,6 +346,25 @@ def send_callback(
         }
 
 
+def send_session_heartbeat(agent_id: str | None, session_id: str | None, elapsed: int, attempt: int) -> None:
+    """Fire-and-forget: send a live heartbeat message to the CTO session. Never raises."""
+    agent = normalize_optional(agent_id)
+    session = normalize_optional(session_id)
+    if not agent or not session:
+        return
+    message = (
+        f"CODEX_HEARTBEAT attempt={attempt} elapsed={elapsed}s — codex is still running. "
+        "Resume task as soon as CODEX_DONE arrives."
+    )
+    try:
+        subprocess.run(
+            ["openclaw", "agent", "--agent", agent, "--session-id", session, "--message", message, "--json"],
+            text=True, capture_output=True, check=False, timeout=20,
+        )
+    except Exception:
+        pass
+
+
 def load_state(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -397,6 +423,7 @@ def run_with_heartbeat(
     timeout: int,
     heartbeat_interval: int,
     attempt_index: int,
+    on_heartbeat: "Callable[[int, int], None] | None" = None,
 ) -> dict:
     started = time.time()
     proc = subprocess.Popen(
@@ -437,6 +464,11 @@ def run_with_heartbeat(
                 file=sys.stderr,
                 flush=True,
             )
+            if on_heartbeat is not None:
+                try:
+                    on_heartbeat(elapsed, heartbeats)
+                except Exception:
+                    pass
             next_heartbeat_at = now + max(1, heartbeat_interval)
         time.sleep(1)
 
@@ -543,12 +575,25 @@ def main() -> int:
             "model_warning": model_warning,
         }
         try:
+            session_hb_interval = max(1, args.session_heartbeat_interval) if args.session_heartbeat_interval > 0 else 0
+            _hb_counter = [0]
+
+            def _on_heartbeat(elapsed: int, heartbeat_num: int) -> None:
+                if session_hb_interval == 0:
+                    return
+                _hb_counter[0] += 1
+                # Fire a session message on every Nth stderr heartbeat so session cadence ≈ session_hb_interval.
+                hb_ratio = max(1, session_hb_interval // max(1, args.heartbeat_interval))
+                if _hb_counter[0] % hb_ratio == 0:
+                    send_session_heartbeat(args.callback_agent_id, args.callback_session_id, elapsed, idx)
+
             run_result = run_with_heartbeat(
                 cmd=cmd,
                 prompt=prompt,
                 timeout=args.timeout,
                 heartbeat_interval=max(1, args.heartbeat_interval),
                 attempt_index=idx,
+                on_heartbeat=_on_heartbeat,
             )
             attempt.update(run_result)
             attempts.append(attempt)

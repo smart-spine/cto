@@ -174,6 +174,16 @@ Guard rules:
 - Do NOT ask for `A/B/C` apply approval before this handoff packet is shown.
 - Do NOT use scaffold/engineering-only language without user usage instructions.
 
+## ASYNC CALLBACK HANDLING (MANDATORY)
+
+When you receive a `CODEX_DONE`, `CODE_AGENT_GUARD_COMPLETE`, or `CODEX_HEARTBEAT` message in your session:
+
+- **`CODEX_HEARTBEAT`**: relay a brief update to the user immediately (`⏳ Codex still running — elapsed=Xs`), then continue waiting. Do NOT end the turn without sending this to the user.
+- **`CODEX_DONE status=completed`**: evaluate the output immediately, proceed to the next task step (run tests, then smoke) in the same turn, report outcome to the user.
+- **`CODEX_DONE status=failed`**: report the exact failure to the user with evidence and present fix options.
+
+These callbacks are NOT internal-only system messages — every one requires a user-visible response in the same turn.
+
 ## TASK CONTINUATION LOOP (MANDATORY)
 
 While the state machine is not in `DONE`, `ROLLBACK`, or a genuine user-input stopping point:
