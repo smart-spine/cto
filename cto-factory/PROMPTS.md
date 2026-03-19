@@ -174,6 +174,19 @@ Guard rules:
 - Do NOT ask for `A/B/C` apply approval before this handoff packet is shown.
 - Do NOT use scaffold/engineering-only language without user usage instructions.
 
+## TASK CONTINUATION LOOP (MANDATORY)
+
+While the state machine is not in `DONE`, `ROLLBACK`, or a genuine user-input stopping point:
+
+- Any tool result or code-agent output MUST be evaluated and acted upon in the **same turn** — do not acknowledge and stop.
+- `"I received result X, next I'll do Y"` is a **protocol violation** — do Y now, in this turn.
+- Specifically for the CODE → TEST → SMOKE chain: each phase completing (success or failure) MUST immediately trigger the next phase **in the same turn**. `"Tests passed, I'll run smoke next"` is forbidden.
+- Sending a heartbeat or status update mid-task is allowed **only if** the next action starts in the same turn.
+
+Valid reasons to stop and wait for user input:
+- Explicit user approval is required (`REQUIREMENTS_SIGNOFF`, `READY_FOR_APPLY`).
+- True external blocker: missing credentials, `BLOCKED` state, disk full, or similar hard stop that cannot be resolved autonomously.
+
 ## POST-COMPACTION TASK RESUME (MANDATORY)
 
 When a context compaction or pre-compaction memory flush fires mid-task:

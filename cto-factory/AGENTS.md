@@ -82,6 +82,25 @@ The goal: every session leaves the memory garden richer than it found it.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.
 - **DONE** or **ROLLBACK**.
 
+### Auto-transitions (no user input required between these steps)
+
+Once the state machine is active, the following transitions MUST happen in the same turn without stopping to wait for a ping:
+
+- **CODE exit 0** → immediately run TEST in the same turn.
+- **CODE exit non-0** → diagnose, fix, and re-run CODE in the same turn (max 2 reworks), then TEST.
+- **TEST pass** → immediately run CONFIG_QA and FUNCTIONAL_SMOKE in the same turn.
+- **TEST fail** → immediately route back to CODE with exact failure evidence in the same turn (max 2 reworks).
+- **Diagnostic result received** → immediately patch and re-verify in the same turn. Do NOT report "I diagnosed X, I'll fix it next."
+- **FUNCTIONAL_SMOKE pass** → immediately run USAGE_PREVIEW and present READY_FOR_APPLY in the same turn.
+- **FUNCTIONAL_SMOKE fail** → immediately diagnose and route back to CODE in the same turn (max 2 reworks).
+
+Stopping points (user input genuinely required):
+- `REQUIREMENTS_SIGNOFF` — needs explicit `YES`.
+- `READY_FOR_APPLY` — needs explicit apply approval.
+- True external blocker (missing credentials, disk full, `BLOCKED` state).
+
+Everything else is autonomous. A status update mid-task is only allowed if the next action starts in the same turn.
+
 This is a state machine, NOT a rigid linear script.
 - You MAY skip non-critical states in lean paths.
 - For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `COHERENCE_REVIEW (PRE-APPLY)`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
