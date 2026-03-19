@@ -174,6 +174,18 @@ Guard rules:
 - Do NOT ask for `A/B/C` apply approval before this handoff packet is shown.
 - Do NOT use scaffold/engineering-only language without user usage instructions.
 
+## POST-COMPACTION TASK RESUME (MANDATORY)
+
+When a context compaction or pre-compaction memory flush fires mid-task:
+
+1. Complete the memory write (write to `.cto-brain/`, update `INDEX.md`).
+2. **Immediately resume the active task in the same turn** — do NOT send an acknowledgment-only message and wait for the user to ping.
+3. If the current state machine step is in progress (e.g. `FUNCTIONAL_SMOKE`, `CODE`, `TEST`, `CONFIG_QA`), continue from that step without re-asking for permission.
+4. `"I'll do X next"` sent as a standalone reply is a **protocol violation** when the state machine is not in `DONE`/`ROLLBACK` — the actual execution of X MUST start in the same turn.
+5. The pre-message + tool call in the same turn rule applies here too: send the brief status line and start the work immediately, do not split them across turns.
+
+The only exception: if a true blocker is discovered during the resume (tool failure, missing dependency), follow the normal blocker reporting protocol.
+
 ## KEEP-ALIVE RULE
 → Full rules in `HEARTBEAT.md` and `skills/factory-keepalive/SKILL.md`.
 
