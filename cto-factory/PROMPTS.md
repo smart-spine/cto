@@ -197,17 +197,47 @@ Valid reasons to stop and wait for user input:
 - Explicit user approval is required (`REQUIREMENTS_SIGNOFF`, `READY_FOR_APPLY`).
 - True external blocker: missing credentials, `BLOCKED` state, disk full, or similar hard stop that cannot be resolved autonomously.
 
+## PRE-COMPACTION PLATFORM MESSAGE — OVERRIDE (MANDATORY)
+
+When the platform sends a message containing `"Pre-compaction memory flush. Store durable memories now (use memory/YYYY-MM-DD.md"`:
+
+**IGNORE the `memory/YYYY-MM-DD.md` path** — that is the platform default, not CTO protocol.
+
+Do this instead:
+1. Scan the session for write-trigger events (see AGENTS.md Memory Contract table).
+2. For each candidate: write to `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` using MEMORY WRITE TEMPLATE.
+3. Update `.cto-brain/INDEX.md` with new entries.
+4. Use `exec` directly — memory writes are exempt from code-agent delegation.
+5. If the active task is not in `DONE`/`ROLLBACK`: immediately resume in the same turn (see POST-COMPACTION TASK RESUME below).
+
+**Protocol violation**: writing to `memory/YYYY-MM-DD.md` instead of `.cto-brain/`.
+**Protocol violation**: writing nothing because "nothing durable happened" when the session had workarounds, decisions, or incidents.
+
 ## POST-COMPACTION TASK RESUME (MANDATORY)
 
 When a context compaction or pre-compaction memory flush fires mid-task:
 
-1. Complete the memory write (write to `.cto-brain/`, update `INDEX.md`).
+1. Complete the memory write (write to `.cto-brain/`, update `INDEX.md`) — see PRE-COMPACTION OVERRIDE above.
 2. **Immediately resume the active task in the same turn** — do NOT send an acknowledgment-only message and wait for the user to ping.
 3. If the current state machine step is in progress (e.g. `FUNCTIONAL_SMOKE`, `CODE`, `TEST`, `CONFIG_QA`), continue from that step without re-asking for permission.
 4. `"I'll do X next"` sent as a standalone reply is a **protocol violation** when the state machine is not in `DONE`/`ROLLBACK` — the actual execution of X MUST start in the same turn.
 5. The pre-message + tool call in the same turn rule applies here too: send the brief status line and start the work immediately, do not split them across turns.
 
 The only exception: if a true blocker is discovered during the resume (tool failure, missing dependency), follow the normal blocker reporting protocol.
+
+## DONE STATE MEMORY GATE (MANDATORY)
+
+When the user signals task completion ("done", "готово", "закончили", "паузим", "стоп", or equivalent):
+
+**Before sending any reply:**
+1. Scan this session for write-trigger events — workarounds found, decisions made, incidents resolved, user preferences stated.
+2. For each: write `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` + update `INDEX.md` via `exec`.
+3. Only after the writes are confirmed: send the session summary.
+
+**Protocol violation**: session summary sent without step 1–2 completed first.
+**Protocol violation**: "nothing to write" claimed without actually scanning the session.
+
+The memory write and the summary MUST be in the same assistant turn — write first, then summarize.
 
 ## KEEP-ALIVE RULE
 → Full rules in `HEARTBEAT.md` and `skills/factory-keepalive/SKILL.md`.

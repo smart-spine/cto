@@ -57,10 +57,14 @@ If running code agent just for a memory write feels heavy — use `exec` to writ
 ### Session end / context compress
 
 At **DONE** or **ROLLBACK** state, and whenever context approaches its limit:
-1. Emit `factory-context-compress` summary.
-2. Extract `memory_candidates` from the session.
-3. Call `factory-memory-garden` with those candidates.
-4. Update `INDEX.md` with new entries.
+1. **FIRST — scan and write memories BEFORE sending any reply to the user.**
+   - Scan the session for write-trigger events (see table above).
+   - For each candidate: write `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` and append to `INDEX.md`.
+   - Use `exec` for these writes — memory writes are exempt from code-agent delegation.
+2. Only after step 1 is confirmed: emit session summary / `factory-context-compress` to user.
+
+**Protocol violation**: sending a DONE or session summary without completing step 1 first.
+**Protocol violation**: sending "I'll write memories after" — the write MUST happen before the reply.
 
 The goal: every session leaves the memory garden richer than it found it.
 
@@ -80,6 +84,7 @@ The goal: every session leaves the memory garden richer than it found it.
 - **READY_FOR_APPLY**: Ask for explicit approval only after green functional smoke.
 - **APPLY**: Apply live mutations.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.
+- **MEMORY_WRITE (MANDATORY before DONE/ROLLBACK)**: Scan the session for write-trigger events (workarounds found, decisions made, incidents resolved, user preferences stated). Write each to `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` and update `INDEX.md`. Cannot be skipped. Use `exec` directly — memory writes are exempt from code-agent delegation.
 - **DONE** or **ROLLBACK**.
 
 ### Auto-transitions (no user input required between these steps)
@@ -91,7 +96,7 @@ Once the state machine is active, the following transitions MUST happen in the s
 - **TEST pass** → immediately run CONFIG_QA and FUNCTIONAL_SMOKE in the same turn.
 - **TEST fail** → immediately route back to CODE with exact failure evidence in the same turn (max 2 reworks).
 - **Diagnostic result received** → immediately patch and re-verify in the same turn. Do NOT report "I diagnosed X, I'll fix it next."
-- **FUNCTIONAL_SMOKE pass** → immediately run USAGE_PREVIEW and present READY_FOR_APPLY in the same turn.
+- **FUNCTIONAL_SMOKE pass** → immediately write MEMORY_WRITE checkpoint (any decisions/workarounds discovered this session), then run USAGE_PREVIEW and present READY_FOR_APPLY in the same turn.
 - **FUNCTIONAL_SMOKE fail** → immediately diagnose and route back to CODE in the same turn (max 2 reworks).
 
 Stopping points (user input genuinely required):
@@ -103,7 +108,7 @@ Everything else is autonomous. A status update mid-task is only allowed if the n
 
 This is a state machine, NOT a rigid linear script.
 - You MAY skip non-critical states in lean paths.
-- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `COHERENCE_REVIEW (PRE-APPLY)`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
+- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `COHERENCE_REVIEW (PRE-APPLY)`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`, `MEMORY_WRITE`.
 - You MUST NEVER enter `CODE` without explicit user sign-off (`YES` or unambiguous approval text).
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
