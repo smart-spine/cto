@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--reasoning-effort", choices=["none", "minimal", "low", "medium", "high"], default=None)
     p.add_argument("--failure-budget", type=int, default=3, help="Consecutive failed runs allowed per session")
+    p.add_argument(
+        "--failure-budget-ttl",
+        type=int,
+        default=7200,
+        help="Seconds after last failure before consecutive_failures auto-resets (default 2h; 0 disables TTL)",
+    )
     p.add_argument("--session-id", default=os.getenv("CTO_SESSION_ID", "default"), help="Session key for failure budget")
     p.add_argument("--state-file", default=str(default_state), help="Path to persistent failure counter JSON")
     p.add_argument(
@@ -56,11 +63,22 @@ def parse_args() -> argparse.Namespace:
         "--sandbox",
         choices=["auto", "workspace-write", "danger-full-access"],
         default="auto",
-        help="Codex sandbox mode. auto starts with workspace-write and falls back to danger-full-access on Landlock failures.",
+        help="Codex sandbox mode. auto starts with workspace-write and falls back to danger-full-access on Landlock failures if --allow-sandbox-escalation is passed.",
+    )
+    p.add_argument(
+        "--allow-sandbox-escalation",
+        action="store_true",
+        help="Explicitly allow sandbox escalation to danger-full-access on landlock failure when sandbox is auto",
     )
     p.add_argument(
         "--callback-message",
         help="Optional callback message template. Supports {status}, {exit_code}, {used_attempts}, {session_id}.",
+    )
+    p.add_argument(
+        "--session-heartbeat-interval",
+        type=int,
+        default=300,
+        help="Send a live heartbeat message to the CTO session every N seconds while codex runs (0 disables; default 5m).",
     )
     return p.parse_args()
 
@@ -104,16 +122,11 @@ def normalize_model_id(requested_model: str) -> tuple[str, str | None]:
     normalized = requested.split("/")[-1].strip()
     warning_parts: list[str] = []
 
-    if normalized != requested:
-        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
-
     if not normalized or not MODEL_TOKEN_RE.match(normalized):
         warning_parts.append(f"invalid model token '{normalized}'")
         normalized = DEFAULT_MODEL
         warning_parts.append(f"fallback to '{DEFAULT_MODEL}'")
 
-    if normalized != requested and not warning_parts:
-        warning_parts.append(f"normalized '{requested}' -> '{normalized}'")
     warning = "; ".join(warning_parts) if warning_parts else None
     return normalized, warning
 
@@ -164,8 +177,8 @@ class _SafeFormatDict(dict):
 
 def render_callback_message(template: str | None, context: dict) -> str:
     default_template = (
-        "CODEX_GUARD_COMPLETE status={status} exit_code={exit_code} used_attempts={used_attempts}. "
-        "session_id={session_id}"
+        "CODEX_DONE status={status} exit_code={exit_code} used_attempts={used_attempts} session_id={session_id}. "
+        "Resume task now: evaluate this result, run tests, run smoke, and report outcome to the user."
     )
     text = template or default_template
     try:
@@ -338,6 +351,25 @@ def send_callback(
         }
 
 
+def send_session_heartbeat(agent_id: str | None, session_id: str | None, elapsed: int, attempt: int) -> None:
+    """Fire-and-forget: send a live heartbeat message to the CTO session. Never raises."""
+    agent = normalize_optional(agent_id)
+    session = normalize_optional(session_id)
+    if not agent or not session:
+        return
+    message = (
+        f"CODEX_HEARTBEAT attempt={attempt} elapsed={elapsed}s — codex is still running. "
+        "Resume task as soon as CODEX_DONE arrives."
+    )
+    try:
+        subprocess.run(
+            ["openclaw", "agent", "--agent", agent, "--session-id", session, "--message", message, "--json"],
+            text=True, capture_output=True, check=False, timeout=20,
+        )
+    except Exception:
+        pass
+
+
 def load_state(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -396,6 +428,7 @@ def run_with_heartbeat(
     timeout: int,
     heartbeat_interval: int,
     attempt_index: int,
+    on_heartbeat: "Callable[[int, int], None] | None" = None,
 ) -> dict:
     started = time.time()
     proc = subprocess.Popen(
@@ -436,6 +469,11 @@ def run_with_heartbeat(
                 file=sys.stderr,
                 flush=True,
             )
+            if on_heartbeat is not None:
+                try:
+                    on_heartbeat(elapsed, heartbeats)
+                except Exception:
+                    pass
             next_heartbeat_at = now + max(1, heartbeat_interval)
         time.sleep(1)
 
@@ -462,7 +500,6 @@ def main() -> int:
     # Allow long-running Codex jobs (multi-hour) without clamping upper bounds.
     # Some legacy callers still pass --timeout 900; treat that as too small and lift to a long floor.
     args.retries = max(1, args.retries)
-    args.timeout = max(10800, args.timeout)
     prompt = load_prompt(args)
     requested_model = args.model
     resolved_model, model_warning = normalize_model_id(requested_model)
@@ -475,7 +512,30 @@ def main() -> int:
     state_path = Path(args.state_file).resolve()
     state = load_state(state_path)
     session_id = str(args.session_id or "default")
-    previous_failures = int(get_session_record(state, session_id).get("consecutive_failures", 0))
+    session_record = get_session_record(state, session_id)
+    previous_failures = int(session_record.get("consecutive_failures", 0))
+
+    # Auto-reset if last failure is older than TTL.
+    if previous_failures > 0 and args.failure_budget_ttl > 0:
+        last_failure_at = session_record.get("last_failure_at")
+        if last_failure_at:
+            try:
+                last_fail_dt = datetime.fromisoformat(last_failure_at.replace("Z", "+00:00"))
+                age_seconds = (datetime.now(timezone.utc) - last_fail_dt).total_seconds()
+                if age_seconds >= args.failure_budget_ttl:
+                    print(
+                        f"[codex-guard] failure budget TTL expired ({int(age_seconds)}s >= {args.failure_budget_ttl}s);"
+                        f" resetting consecutive_failures={previous_failures} -> 0",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    session_record["consecutive_failures"] = 0
+                    state[session_id] = session_record
+                    save_state(state_path, state)
+                    previous_failures = 0
+            except Exception:
+                pass  # malformed timestamp — leave state as-is
+
     if previous_failures >= max(args.failure_budget, 1):
         callback_context = {
             "status": "blocked",
@@ -520,12 +580,25 @@ def main() -> int:
             "model_warning": model_warning,
         }
         try:
+            session_hb_interval = max(1, args.session_heartbeat_interval) if args.session_heartbeat_interval > 0 else 0
+            _hb_counter = [0]
+
+            def _on_heartbeat(elapsed: int, heartbeat_num: int) -> None:
+                if session_hb_interval == 0:
+                    return
+                _hb_counter[0] += 1
+                # Fire a session message on every Nth stderr heartbeat so session cadence ≈ session_hb_interval.
+                hb_ratio = max(1, session_hb_interval // max(1, args.heartbeat_interval))
+                if _hb_counter[0] % hb_ratio == 0:
+                    send_session_heartbeat(args.callback_agent_id, args.callback_session_id, elapsed, idx)
+
             run_result = run_with_heartbeat(
                 cmd=cmd,
                 prompt=prompt,
                 timeout=args.timeout,
                 heartbeat_interval=max(1, args.heartbeat_interval),
                 attempt_index=idx,
+                on_heartbeat=_on_heartbeat,
             )
             attempt.update(run_result)
             attempts.append(attempt)
@@ -576,6 +649,7 @@ def main() -> int:
                 args.sandbox == "auto"
                 and current_sandbox == "workspace-write"
                 and idx < args.retries
+                and args.allow_sandbox_escalation
                 and is_landlock_sandbox_failure(
                     str(run_result["stderr"]), str(run_result["stdout"]), int(run_result["exit_code"])
                 )

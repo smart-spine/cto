@@ -88,8 +88,27 @@ if [[ -z "${CHAT_ID}" || -z "${TOPIC_ID}" ]]; then
   fi
 fi
 
+resolve_latest_session() {
+  openclaw sessions --agent "${AGENT_ID}" --json 2>/dev/null \
+    | python3 - <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.stdin.read())
+    sessions = data.get("sessions", [])
+    ordered = sorted(
+        [s for s in sessions if isinstance(s, dict)],
+        key=lambda s: int(s.get("updatedAt") or 0),
+        reverse=True,
+    )
+    print(ordered[0]["sessionId"] if ordered else "")
+except Exception:
+    print("")
+PY
+}
+
 notify() {
   local text="$1"
+  # Direct Telegram message — immediate fallback that bypasses the agent session.
   if [[ -n "${CHAT_ID}" && -n "${TOPIC_ID}" ]]; then
     openclaw message send \
       --channel telegram \
@@ -100,10 +119,16 @@ notify() {
   else
     openclaw system event --mode now --text "${text}" >/dev/null 2>&1 || true
   fi
-  if [[ -n "${CALLBACK_SESSION_ID}" ]]; then
+  # Agent session callback — required for CTO to resume its conversation loop.
+  # If no explicit session ID was passed, resolve the latest active session.
+  local session_id="${CALLBACK_SESSION_ID}"
+  if [[ -z "${session_id}" ]]; then
+    session_id="$(resolve_latest_session)"
+  fi
+  if [[ -n "${session_id}" ]]; then
     openclaw agent \
       --agent "${AGENT_ID}" \
-      --session-id "${CALLBACK_SESSION_ID}" \
+      --session-id "${session_id}" \
       --message "${text}" \
       --timeout 120 >/dev/null 2>&1 || true
   fi

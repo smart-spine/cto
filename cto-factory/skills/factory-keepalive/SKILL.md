@@ -50,8 +50,8 @@ Sub-agent dispatch guardrail (mandatory):
 - Direct foreground `openclaw agent --message` is ONLY allowed for short queries (≤60s expected).
 
 Codex-specific guardrail (mandatory):
-- for `codex_guarded_exec.py`, if expected runtime > 90s you MUST wrap it with `cto_async_task.py` (callback heartbeats enabled).
-- for short codex runs (<=90s expected), foreground is allowed with built-in heartbeat (`[codex-guard] still running ...`).
+- for `codex_guarded_exec.py`, **ALWAYS wrap with `cto_async_task.py`** — no exceptions based on "expected" duration. Codex runtimes are inherently unpredictable: a "quick config patch" or "single-file fix" can stall for 50+ minutes. Duration estimates are unreliable — this rule is unconditional.
+- foreground codex (no async wrapper) is ONLY allowed for read-only diagnostic runs with no file writes, no config changes, and no restarts. Any mutation path → always async, no exceptions.
 - DO NOT use raw `exec` with `background=true` for direct Codex guarded runs.
 - if tool returns `Command still running (session ...)` during an interactive turn, switch into explicit `process poll` loop with `timeout=45000` until completion/failure.
 - do NOT use poll timeout `>=120000` in interactive turns.

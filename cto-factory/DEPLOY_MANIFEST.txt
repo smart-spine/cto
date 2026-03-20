@@ -33,6 +33,7 @@ skills/factory-apply/SKILL.md
 skills/factory-backup/SKILL.md
 skills/factory-codegen/SKILL.md
 skills/factory-codex-plan-audit/SKILL.md
+skills/factory-coherence-review/SKILL.md
 skills/factory-config-diff/SKILL.md
 skills/factory-config-qa/SKILL.md
 skills/factory-context-compress/SKILL.md

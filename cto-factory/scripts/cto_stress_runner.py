@@ -92,8 +92,7 @@ def sh(cmd: List[str], timeout: int = 180) -> subprocess.CompletedProcess[str]:
         )
 
 
-def ask_cto(agent: str, session_id: str, message: str, timeout: int = LONG_TURN_TIMEOUT_SEC) -> str:
-    root = Path("/Users/uladzislaupraskou/.openclaw")
+def ask_cto(agent: str, session_id: str, message: str, root: Path, timeout: int = LONG_TURN_TIMEOUT_SEC) -> str:
     recipient = to_recipient_for_session(session_id)
     cleanup_log = ""
     proc = None
@@ -327,6 +326,7 @@ def architecture_ok(root: Path, agent_id: str) -> tuple[bool, str]:
 
 
 def run_transport_test(
+    root: Path,
     agent: str,
     tester_token: str,
     cto_token: str,
@@ -343,7 +343,7 @@ def run_transport_test(
     ok_send, raw_send, send_payload = tg_send_message_ex(tester_token, chat_id, topic_id, msg)
     tester_message_id = send_payload.get("result", {}).get("message_id")
 
-    cto_reply = ask_cto(agent, session, msg, timeout=LONG_TURN_TIMEOUT_SEC)
+    cto_reply = ask_cto(agent, session, msg, root, timeout=LONG_TURN_TIMEOUT_SEC)
     transcript.append(
         Turn(
             codex=msg,
@@ -355,7 +355,7 @@ def run_transport_test(
     )
     if f"{marker}-ACK" not in cto_reply:
         fix_prompt = f"Reply with exactly {marker}-ACK in first line, then one short sentence."
-        cto_reply = ask_cto(agent, session, fix_prompt, timeout=LONG_TURN_TIMEOUT_SEC)
+        cto_reply = ask_cto(agent, session, fix_prompt, root, timeout=LONG_TURN_TIMEOUT_SEC)
         transcript.append(Turn(codex=fix_prompt, cto=cto_reply))
 
     relay_text = cto_reply if cto_reply.strip() else f"{marker}-ACK"
@@ -375,7 +375,7 @@ def run_transport_test(
 
     seen = find_marker_in_sessions(
         marker,
-        "/Users/uladzislaupraskou/.openclaw/agents/cto-factory/sessions/*.jsonl",
+        str(root / "agents" / agent / "sessions" / "*.jsonl"),
     )
     passed = ok_send and ok_relay and (f"{marker}-ACK" in cto_reply) and seen
     postmortem = (
@@ -406,18 +406,18 @@ def run_creation_test(root: Path, agent: str) -> Report:
     ]
     cto_last = ""
     for msg in prompts:
-        cto_last = ask_cto(agent, session, msg, timeout=LONG_TURN_TIMEOUT_SEC)
+        cto_last = ask_cto(agent, session, msg, root, timeout=LONG_TURN_TIMEOUT_SEC)
         transcript.append(Turn(codex=msg, cto=cto_last))
         if is_timeout_error(cto_last):
             status_msg = "Status check only: if build is ready, reply with READY_FOR_APPLY. If not, reply NOT_READY with one-line reason."
-            cto_last = ask_cto(agent, session, status_msg, timeout=LONG_TURN_TIMEOUT_SEC)
+            cto_last = ask_cto(agent, session, status_msg, root, timeout=LONG_TURN_TIMEOUT_SEC)
             transcript.append(Turn(codex=status_msg, cto=cto_last))
         if is_ready(cto_last) or is_blocked(cto_last):
             break
     loop_guard = 0
     while not is_ready(cto_last) and not is_blocked(cto_last) and loop_guard < 1:
         msg = "Proceed with implementation and stop at READY_FOR_APPLY."
-        cto_last = ask_cto(agent, session, msg, timeout=LONG_TURN_TIMEOUT_SEC)
+        cto_last = ask_cto(agent, session, msg, root, timeout=LONG_TURN_TIMEOUT_SEC)
         transcript.append(Turn(codex=msg, cto=cto_last))
         loop_guard += 1
 
@@ -436,7 +436,7 @@ def run_creation_test(root: Path, agent: str) -> Report:
     )
 
 
-def run_memory_test(agent: str) -> Report:
+def run_memory_test(root: Path, agent: str) -> Report:
     transcript: List[Turn] = []
     session = f"stress-memory-{int(time.time())}"
     prompts = [
@@ -448,7 +448,7 @@ def run_memory_test(agent: str) -> Report:
     ]
     answers: List[str] = []
     for msg in prompts:
-        ans = ask_cto(agent, session, msg, timeout=LONG_TURN_TIMEOUT_SEC)
+        ans = ask_cto(agent, session, msg, root, timeout=LONG_TURN_TIMEOUT_SEC)
         answers.append(ans)
         transcript.append(Turn(codex=msg, cto=ans))
     last = answers[-1] if answers else ""
@@ -470,13 +470,13 @@ def run_memory_test(agent: str) -> Report:
     )
 
 
-def run_self_testing_test(agent: str) -> Report:
+def run_self_testing_test(root: Path, agent: str) -> Report:
     transcript: List[Turn] = []
     session = f"stress-selftest-{int(time.time())}"
     prompt = (
         "For market-signal-radar, run the local test suite now and return exact commands, full result lines, and exit codes."
     )
-    ans = ask_cto(agent, session, prompt, timeout=LONG_TURN_TIMEOUT_SEC)
+    ans = ask_cto(agent, session, prompt, root, timeout=LONG_TURN_TIMEOUT_SEC)
     transcript.append(Turn(codex=prompt, cto=ans))
     passed = (
         ("node --test" in ans or "pytest" in ans)
@@ -495,14 +495,14 @@ def run_self_testing_test(agent: str) -> Report:
     )
 
 
-def run_execution_test(agent: str) -> Report:
+def run_execution_test(root: Path, agent: str) -> Report:
     transcript: List[Turn] = []
     session = f"stress-exec-{int(time.time())}"
     prompt = (
         "Run one real local smoke execution for market-signal-radar now. "
         "Return exact command, exit code, and a final operational statement."
     )
-    ans = ask_cto(agent, session, prompt, timeout=LONG_TURN_TIMEOUT_SEC)
+    ans = ask_cto(agent, session, prompt, root, timeout=LONG_TURN_TIMEOUT_SEC)
     transcript.append(Turn(codex=prompt, cto=ans))
     passed = (
         ("exit" in ans.lower() or "exit code" in ans.lower())
@@ -543,15 +543,15 @@ def main() -> int:
     selected = {item.strip().lower() for item in args.only.split(",")} if args.only != "all" else {"all"}
     reports: List[Report] = []
     if "all" in selected or "transport" in selected:
-        reports.append(run_transport_test(args.agent, args.tester_token, args.cto_token, args.chat_id, args.topic_id))
+        reports.append(run_transport_test(root, args.agent, args.tester_token, args.cto_token, args.chat_id, args.topic_id))
     if "all" in selected or "creation" in selected:
         reports.append(run_creation_test(root, args.agent))
     if "all" in selected or "memory" in selected:
-        reports.append(run_memory_test(args.agent))
+        reports.append(run_memory_test(root, args.agent))
     if "all" in selected or "selftest" in selected:
-        reports.append(run_self_testing_test(args.agent))
+        reports.append(run_self_testing_test(root, args.agent))
     if "all" in selected or "execution" in selected:
-        reports.append(run_execution_test(args.agent))
+        reports.append(run_execution_test(root, args.agent))
 
     paths: List[Path] = []
     for idx, report in enumerate(reports, start=1):

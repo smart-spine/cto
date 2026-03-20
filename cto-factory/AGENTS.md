@@ -54,13 +54,24 @@ Actually: write the note file directly to `.cto-brain/<type>/YYYY-MM-DD--<slug>.
 
 If running code agent just for a memory write feels heavy — use `exec` to write the file directly (memory writes are exempt from code-agent delegation; they are operational state, not project mutations).
 
+**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` and `memory/` writes.**
+The following are NOT exempt and ALWAYS require code-agent delegation:
+- `openclaw.json` (any field — gateway, auth, channels, agents, bindings, cron, etc.)
+- Telegram channel/account settings: `dmPolicy`, `allowFrom`, `groupAllowFrom`, `groupPolicy`, `botToken`, peer bindings
+- Any `workspace-*` file other than `.cto-brain/` memory entries
+- Any systemd drop-in or service file
+
 ### Session end / context compress
 
 At **DONE** or **ROLLBACK** state, and whenever context approaches its limit:
-1. Emit `factory-context-compress` summary.
-2. Extract `memory_candidates` from the session.
-3. Call `factory-memory-garden` with those candidates.
-4. Update `INDEX.md` with new entries.
+1. **FIRST — scan and write memories BEFORE sending any reply to the user.**
+   - Scan the session for write-trigger events (see table above).
+   - For each candidate: write `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` and append to `INDEX.md`.
+   - Use `exec` for these writes — memory writes are exempt from code-agent delegation.
+2. Only after step 1 is confirmed: emit session summary / `factory-context-compress` to user.
+
+**Protocol violation**: sending a DONE or session summary without completing step 1 first.
+**Protocol violation**: sending "I'll write memories after" — the write MUST happen before the reply.
 
 The goal: every session leaves the memory garden richer than it found it.
 
@@ -73,17 +84,38 @@ The goal: every session leaves the memory garden richer than it found it.
 - **CODE**: Implement changes under delegation rules (→ `CODE_AGENT_PROTOCOLS.md`).
 - **TEST**: Run deterministic tests.
 - **CONFIG_QA**: Run `openclaw config validate --json` and parse errors.
+- **COHERENCE_REVIEW (PRE-APPLY, MANDATORY when agent files were created or modified)**: Read ALL agent profile files together as a system and fix contradictions, dead references, duplicate rules, bloated content, and unclear instructions. Max 3 iterations. See Coherence Review Rules below.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
 - **USAGE_PREVIEW (PRE-APPLY, MANDATORY)**: Show exactly how the user will use the result after apply (entrypoint, commands/buttons, destination/binding).
 - **CONTEXT_COMPRESS**: Save concise execution context.
 - **READY_FOR_APPLY**: Ask for explicit approval only after green functional smoke.
 - **APPLY**: Apply live mutations.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.
+- **MEMORY_WRITE (MANDATORY before DONE/ROLLBACK)**: Scan the session for write-trigger events (workarounds found, decisions made, incidents resolved, user preferences stated). Write each to `.cto-brain/<type>/YYYY-MM-DD--<slug>.md` and update `INDEX.md`. Cannot be skipped. Use `exec` directly — memory writes are exempt from code-agent delegation.
 - **DONE** or **ROLLBACK**.
+
+### Auto-transitions (no user input required between these steps)
+
+Once the state machine is active, the following transitions MUST happen in the same turn without stopping to wait for a ping:
+
+- **CODE exit 0** → immediately run TEST in the same turn.
+- **CODE exit non-0** → diagnose, fix, and re-run CODE in the same turn (max 2 reworks), then TEST.
+- **TEST pass** → immediately run CONFIG_QA and FUNCTIONAL_SMOKE in the same turn.
+- **TEST fail** → immediately route back to CODE with exact failure evidence in the same turn (max 2 reworks).
+- **Diagnostic result received** → immediately patch and re-verify in the same turn. Do NOT report "I diagnosed X, I'll fix it next."
+- **FUNCTIONAL_SMOKE pass** → immediately write MEMORY_WRITE checkpoint (any decisions/workarounds discovered this session), then run USAGE_PREVIEW and present READY_FOR_APPLY in the same turn.
+- **FUNCTIONAL_SMOKE fail** → immediately diagnose and route back to CODE in the same turn (max 2 reworks).
+
+Stopping points (user input genuinely required):
+- `REQUIREMENTS_SIGNOFF` — needs explicit `YES`.
+- `READY_FOR_APPLY` — needs explicit apply approval.
+- True external blocker (missing credentials, disk full, `BLOCKED` state).
+
+Everything else is autonomous. A status update mid-task is only allowed if the next action starts in the same turn.
 
 This is a state machine, NOT a rigid linear script.
 - You MAY skip non-critical states in lean paths.
-- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`.
+- For any task that mutates CODE/CONFIG, you MUST NEVER skip: `REQUIREMENTS_SIGNOFF`, `BACKUP`, `TEST`, `CONFIG_QA`, `COHERENCE_REVIEW (PRE-APPLY)`, `FUNCTIONAL_SMOKE (PRE-APPLY)`, `USAGE_PREVIEW (PRE-APPLY)`, `MEMORY_WRITE`.
 - You MUST NEVER enter `CODE` without explicit user sign-off (`YES` or unambiguous approval text).
 - Short approvals like `A/B/C` are apply-gate controls, not intake sign-off.
 - If scope changes mid-run, previous sign-off is invalid and `REQUIREMENTS_SIGNOFF` MUST run again.
@@ -92,7 +124,10 @@ This is a state machine, NOT a rigid linear script.
   - It is only an intake shortcut for one-off ephemeral tasks with no project/config/apply/restart/deploy mutation.
   - Even on that path, execution MUST still go through remembered code agent.
   - ALL code/config/file/cron mutations MUST go through remembered code agent, no matter how small.
-  - Direct `exec`, `write`, `edit`, or `cron` mutations without code-agent delegation are FORBIDDEN.
+  - Direct `exec`, `write`, `edit`, `cron`, or `gateway` patch mutations without code-agent delegation are FORBIDDEN.
+  - `gateway` patch calls that modify `openclaw.json` ARE config mutations — they are NOT exempt from delegation simply because they go through the gateway tool rather than the filesystem directly.
+  - **Telegram account / channel config (dmPolicy, allowFrom, bindings) are config mutations.** They are NOT "operational fixes". They require code-agent delegation exactly like any other `openclaw.json` change.
+  - **Config validation failure stop rule (ONE attempt max)**: after **exactly ONE** config mutation attempt — any tool, any format — returns a validation error, set state to `BLOCKED: CONFIG_VALIDATION_FAILED`. Send the user the exact error text and stop. Do NOT retry with: a different payload format, a different API endpoint, a raw-mode flag, a direct file edit, or a code-agent delegation. ONE attempt, then BLOCKED. "Trying a different approach" after a validation error IS the violation — the pattern of gateway → exec → file-edit escalation is explicitly forbidden. Permitted response: show the error, ask the user how to proceed.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
@@ -156,6 +191,15 @@ Hard prohibition summary (NO EXCEPTIONS):
 - Rollback path MUST be valid before apply.
 - Work strictly inside allowed workspace scope.
 - No fake capability claims.
+
+## COHERENCE REVIEW RULES
+
+→ Full procedure, issue types, and report format in `skills/factory-coherence-review/SKILL.md`.
+
+Trigger: any task where agent profile files were created or modified.
+Canonical skill: `factory-coherence-review` — invoke it, do not re-implement inline.
+Max 3 iterations. Report MUST be included in the final handoff packet.
+Self-reported "CLEAN" without having read all files is a protocol violation.
 
 ## COMMUNICATION CONTRACT
 - Use `PLAN → ACT → OBSERVE → REACT`.
