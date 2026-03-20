@@ -9,11 +9,15 @@ Purpose:
 - produce a clean, non-redundant agent profile set before apply.
 
 When to use:
-- after any agent profile files are created or modified
-  (`IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md`, `README.md`,
-  `SKILL_ROUTING.md`, `SKILL_INDEX.md`, `skills/*/SKILL.md`),
+- **PRE-APPLY gate only** — run ONCE after all CODE changes for the task are complete,
+  immediately before `READY_FOR_APPLY`. Do NOT run after each individual file edit
+  mid-CODE; the agent profile set is incomplete at that point.
 - as a standalone audit requested by the user,
 - never skip when `factory-create-agent` or `factory-skill-creator` ran.
+
+Applies when any of the following were created or modified during the task:
+`IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md`, `README.md`,
+`SKILL_ROUTING.md`, `SKILL_INDEX.md`, `skills/*/SKILL.md`.
 
 Input:
 - `agent_workspace` — absolute path to the target agent workspace.

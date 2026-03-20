@@ -63,7 +63,12 @@ def parse_args() -> argparse.Namespace:
         "--sandbox",
         choices=["auto", "workspace-write", "danger-full-access"],
         default="auto",
-        help="Codex sandbox mode. auto starts with workspace-write and falls back to danger-full-access on Landlock failures.",
+        help="Codex sandbox mode. auto starts with workspace-write and falls back to danger-full-access on Landlock failures if --allow-sandbox-escalation is passed.",
+    )
+    p.add_argument(
+        "--allow-sandbox-escalation",
+        action="store_true",
+        help="Explicitly allow sandbox escalation to danger-full-access on landlock failure when sandbox is auto",
     )
     p.add_argument(
         "--callback-message",
@@ -644,6 +649,7 @@ def main() -> int:
                 args.sandbox == "auto"
                 and current_sandbox == "workspace-write"
                 and idx < args.retries
+                and args.allow_sandbox_escalation
                 and is_landlock_sandbox_failure(
                     str(run_result["stderr"]), str(run_result["stdout"]), int(run_result["exit_code"])
                 )
