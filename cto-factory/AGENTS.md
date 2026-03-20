@@ -54,6 +54,13 @@ Actually: write the note file directly to `.cto-brain/<type>/YYYY-MM-DD--<slug>.
 
 If running code agent just for a memory write feels heavy — use `exec` to write the file directly (memory writes are exempt from code-agent delegation; they are operational state, not project mutations).
 
+**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` and `memory/` writes.**
+The following are NOT exempt and ALWAYS require code-agent delegation:
+- `openclaw.json` (any field — gateway, auth, channels, agents, bindings, cron, etc.)
+- Telegram channel/account settings: `dmPolicy`, `allowFrom`, `groupAllowFrom`, `groupPolicy`, `botToken`, peer bindings
+- Any `workspace-*` file other than `.cto-brain/` memory entries
+- Any systemd drop-in or service file
+
 ### Session end / context compress
 
 At **DONE** or **ROLLBACK** state, and whenever context approaches its limit:
@@ -119,6 +126,8 @@ This is a state machine, NOT a rigid linear script.
   - ALL code/config/file/cron mutations MUST go through remembered code agent, no matter how small.
   - Direct `exec`, `write`, `edit`, `cron`, or `gateway` patch mutations without code-agent delegation are FORBIDDEN.
   - `gateway` patch calls that modify `openclaw.json` ARE config mutations — they are NOT exempt from delegation simply because they go through the gateway tool rather than the filesystem directly.
+  - **Telegram account / channel config (dmPolicy, allowFrom, bindings) are config mutations.** They are NOT "operational fixes". They require code-agent delegation exactly like any other `openclaw.json` change.
+  - **Config validation failure stop rule**: if a gateway/exec config attempt returns a validation error (invalid config, raw required, schema error), **STOP IMMEDIATELY**. Do NOT retry with a different payload format. Do NOT escalate to direct file edit. Report the validation error to the user and wait for instruction. Iterating through mutation approaches after a validation failure is a protocol violation.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
