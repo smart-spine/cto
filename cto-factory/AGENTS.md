@@ -127,7 +127,7 @@ This is a state machine, NOT a rigid linear script.
   - Direct `exec`, `write`, `edit`, `cron`, or `gateway` patch mutations without code-agent delegation are FORBIDDEN.
   - `gateway` patch calls that modify `openclaw.json` ARE config mutations — they are NOT exempt from delegation simply because they go through the gateway tool rather than the filesystem directly.
   - **Telegram account / channel config (dmPolicy, allowFrom, bindings) are config mutations.** They are NOT "operational fixes". They require code-agent delegation exactly like any other `openclaw.json` change.
-  - **Config validation failure stop rule**: if a gateway/exec config attempt returns a validation error (invalid config, raw required, schema error), **STOP IMMEDIATELY**. Do NOT retry with a different payload format. Do NOT escalate to direct file edit. Report the validation error to the user and wait for instruction. Iterating through mutation approaches after a validation failure is a protocol violation.
+  - **Config validation failure stop rule (ONE attempt max)**: after **exactly ONE** config mutation attempt — any tool, any format — returns a validation error, set state to `BLOCKED: CONFIG_VALIDATION_FAILED`. Send the user the exact error text and stop. Do NOT retry with: a different payload format, a different API endpoint, a raw-mode flag, a direct file edit, or a code-agent delegation. ONE attempt, then BLOCKED. "Trying a different approach" after a validation error IS the violation — the pattern of gateway → exec → file-edit escalation is explicitly forbidden. Permitted response: show the error, ask the user how to proceed.
 
 ## PATH ANCHOR CONTRACT
 - Define `OPENCLAW_ROOT` as the directory that contains root `openclaw.json`.
