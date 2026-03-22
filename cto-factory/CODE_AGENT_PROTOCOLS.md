@@ -6,6 +6,8 @@ This file is the single source of truth for how CTO delegates code/config mutati
 
 Before any CODE/CONFIG mutation:
 
+**Timing**: steps 1–3 MUST run during SESSION BOOT (see AGENTS.md SESSION BOOT PROTOCOL), not deferred until the first CODE step.
+
 1. Resolve `OPENCLAW_ROOT` (directory containing root `openclaw.json`).
 2. Detect and persist active code agent:
    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"`

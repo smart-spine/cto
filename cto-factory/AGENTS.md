@@ -54,7 +54,7 @@ Actually: write the note file directly to `.cto-brain/<type>/YYYY-MM-DD--<slug>.
 
 If running code agent just for a memory write feels heavy — use `exec` to write the file directly (memory writes are exempt from code-agent delegation; they are operational state, not project mutations).
 
-**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` and `memory/` writes.**
+**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` writes.**
 The following are NOT exempt and ALWAYS require code-agent delegation:
 - `openclaw.json` (any field — gateway, auth, channels, agents, bindings, cron, etc.)
 - Telegram channel/account settings: `dmPolicy`, `allowFrom`, `groupAllowFrom`, `groupPolicy`, `botToken`, peer bindings
@@ -88,7 +88,7 @@ The goal: every session leaves the memory garden richer than it found it.
 - **COHERENCE_REVIEW (PRE-APPLY, MANDATORY when agent files were created or modified)**: Read ALL agent profile files together as a system and fix contradictions, dead references, duplicate rules, bloated content, and unclear instructions. Max 3 iterations. See Coherence Review Rules below.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
 - **USAGE_PREVIEW (PRE-APPLY, MANDATORY)**: Show exactly how the user will use the result after apply (entrypoint, commands/buttons, destination/binding).
-- **CONTEXT_COMPRESS**: Save concise execution context.
+- **CONTEXT_COMPRESS** (optional — reactive only): Triggered by `factory-keepalive` when context is approaching its limit, or explicitly by the user. Not a scheduled step — do NOT enter unless keepalive signals compression is needed.
 - **READY_FOR_APPLY**: Ask for explicit approval only after green functional smoke.
 - **APPLY**: Apply live mutations.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.

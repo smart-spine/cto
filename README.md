@@ -403,14 +403,14 @@ The CTO bot searches the web before presenting an implementation plan for non-tr
 CTO uses DuckDuckGo via `curl` + `web_fetch` to pull 3–20 sources depending on task complexity. Results are cached in `.cto-brain/research/` and referenced throughout the session.
 
 **Enhanced search with Brave Search API (optional):**
-For higher-quality results and more reliable search, add a Brave Search API key:
+For higher-quality and more reliable search results, add a Brave Search API key.
+Brave Search API requires a paid subscription — see [brave.com/search/api](https://brave.com/search/api/) for current plans.
 
-1. Sign up at [brave.com/search/api](https://brave.com/search/api/) — free tier includes 2 000 queries/month
-2. On your server, run:
-   ```bash
-   openclaw secrets set BRAVE_API_KEY <your-key>
-   ```
-3. No restart needed. CTO will automatically use Brave Search instead of the curl fallback.
+Once you have a key, add it on your server:
+```bash
+openclaw secrets set BRAVE_API_KEY <your-key>
+```
+No restart needed. CTO will automatically use Brave Search instead of the curl fallback.
 
 ## Security Notes
 
