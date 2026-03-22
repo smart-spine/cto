@@ -42,6 +42,28 @@ Exemptions from delegation requirement:
 
 - Every delegation MUST include `Write Unit Tests & Verify`.
 - For non-trivial tasks, MUST run `PLAN -> IMPLEMENT -> AUDIT`.
+
+### Doc-sync checklist (MANDATORY when any constant, config value, or agent parameter changes)
+
+When a code change modifies a constant, threshold, limit, model name, or any agent parameter
+(e.g. capital size, stop-loss %, interval, fee rate, agent name), the delegation prompt MUST
+explicitly instruct the code agent to sync ALL reference locations — not just the source variable.
+
+Mandatory sync targets to check and update:
+- `IDENTITY.md` — description, rules, operating parameters
+- `SOUL.md` — personality/values references to numeric constraints
+- Code docstrings and inline comments that mention the value
+- Test fixtures and mock return values that reference the old value
+- Any `.md` files in `skills/` that describe the behavior in human-readable terms
+
+How to enforce: append to every delegation prompt that changes a parameter value:
+```
+After changing the value, grep the entire workspace for the old value and update every
+occurrence in IDENTITY.md, SOUL.md, docstrings, comments, and test fixtures. Do not leave
+stale references. Report every file updated.
+```
+
+Failure to sync is a protocol violation — the same drift will recur on the next session compaction.
 - Plan/exec outputs MUST include machine-checkable blocks:
   - `CODEX_PLAN_JSON_BEGIN/END`
   - `CODEX_EXEC_REPORT_JSON_BEGIN/END`
