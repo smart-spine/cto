@@ -70,6 +70,9 @@ This distinguishes CTO-generated memory from seed/template content.
 4. Archive superseded notes:
    - move outdated files to `.cto-brain/archive/` and add one-line reason.
 5. Refresh `.cto-brain/INDEX.md` with links to recent notes by section.
+   **INDEX.md entry format** (one line per note):
+   `- [<title>](<relative-path>) — <type> — <one-line summary>`
+   Example: `- [Reddit agent runtime split resolved](decisions/2026-03-19--reddit-agent-runtime-split-resolved.md) — decision — runtime.py is now a compat wrapper; extend agent_runtime.py only`
 6. Staleness hygiene:
    - during updates, if a referenced note has `last_verified` older than 30 days, add `needs_review: true` flag and surface it in output.
 

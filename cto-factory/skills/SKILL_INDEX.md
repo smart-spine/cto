@@ -17,8 +17,8 @@ Purpose:
 | `factory-create-agent` | New agent workspace creation + registration contract. |
 | `factory-skill-creator` | Skill package generation/consistency for created agents. |
 | `factory-ux-designer` | Telegram interactive UX safety (buttons/commands/cancel/status). |
-| `factory-test-agent` | QA suite (white-box/black-box/chaos scenarios). |
-| `factory-smoke` | Functional smoke scenarios and runtime delivery checks. |
+| `factory-test-agent` | Deep QA suite (white-box/black-box/chaos scenarios, comparative regression). Use for major behavior changes and release gates. |
+| `factory-smoke` | Quick pre-apply functional check — one realistic request proves the core delivery path works. Faster than `factory-test-agent`; not a substitute for full regression. |
 | `factory-config-qa` | `openclaw config validate --json` gate + error parsing. |
 | `factory-config-diff` | Human-readable config mutation summary. |
 | `factory-apply` | Apply gate handling and controlled live mutations. |

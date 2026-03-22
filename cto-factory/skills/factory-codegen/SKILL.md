@@ -30,7 +30,10 @@ Procedure for code tasks:
      - `python3 ${OPENCLAW_ROOT}/workspace-factory/scripts/cto_codex_output_gate.py --mode plan --requirements-file <requirements_json> --codex-output-file <plan_output_txt>`
    - if plan gate fails, send gap list back to code agent and rerun PLAN.
 5. IMPLEMENT phase delegation, include exact line: `Write Unit Tests & Verify`.
-   - Build command from remembered code-agent memory per `CODE_AGENT_PROTOCOLS.md`.
+   - Build command from remembered code-agent memory per `CODE_AGENT_PROTOCOLS.md`:
+     - `codex` → `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir <root> --model gpt-5.3-codex --prompt-file <prompt_file> --retries 3 --timeout 10800 ...`
+     - `claude` → temp file + stdin pattern from `CODE_AGENT_PROTOCOLS.md` section 4.
+   - **FORBIDDEN**: naked `codex exec ...` or using the built-in `coding-agent` skill — both bypass retries, failure budget, JSON markers, and output gate.
    - For long runs, wrap with `cto_async_task.py` per `skills/factory-keepalive/SKILL.md`.
    - Ensure `--workdir` strictly points to the ROOT project location.
 6. Validate implementation report block:

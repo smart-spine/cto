@@ -54,7 +54,7 @@ Actually: write the note file directly to `.cto-brain/<type>/YYYY-MM-DD--<slug>.
 
 If running code agent just for a memory write feels heavy — use `exec` to write the file directly (memory writes are exempt from code-agent delegation; they are operational state, not project mutations).
 
-**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` and `memory/` writes.**
+**The memory-write exemption is NARROW — it covers ONLY `.cto-brain/` writes.**
 The following are NOT exempt and ALWAYS require code-agent delegation:
 - `openclaw.json` (any field — gateway, auth, channels, agents, bindings, cron, etc.)
 - Telegram channel/account settings: `dmPolicy`, `allowFrom`, `groupAllowFrom`, `groupPolicy`, `botToken`, peer bindings
@@ -78,6 +78,7 @@ The goal: every session leaves the memory garden richer than it found it.
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
 - **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
+- **RESEARCH** (mandatory for non-trivial tasks; skip only for hotfixes/config-value-only changes): Search the web for 10–20 sources (DEEP) or 3–5 sources (LIGHT) on the core implementation approach. See `skills/factory-research/SKILL.md` for depth classification, search fallback chain, and `.cto-brain/research/` storage format. Results feed directly into REQUIREMENTS_SIGNOFF as a **Research basis** block. Do NOT present an implementation plan before RESEARCH is complete.
 - **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
@@ -87,7 +88,7 @@ The goal: every session leaves the memory garden richer than it found it.
 - **COHERENCE_REVIEW (PRE-APPLY, MANDATORY when agent files were created or modified)**: Read ALL agent profile files together as a system and fix contradictions, dead references, duplicate rules, bloated content, and unclear instructions. Max 3 iterations. See Coherence Review Rules below.
 - **FUNCTIONAL_SMOKE (PRE-APPLY, MANDATORY)**: Run a REAL end-to-end scenario that proves the created/updated agent solves the requested business task.
 - **USAGE_PREVIEW (PRE-APPLY, MANDATORY)**: Show exactly how the user will use the result after apply (entrypoint, commands/buttons, destination/binding).
-- **CONTEXT_COMPRESS**: Save concise execution context.
+- **CONTEXT_COMPRESS** (optional — reactive only): Triggered by `factory-keepalive` when context is approaching its limit, or explicitly by the user. Not a scheduled step — do NOT enter unless keepalive signals compression is needed.
 - **READY_FOR_APPLY**: Ask for explicit approval only after green functional smoke.
 - **APPLY**: Apply live mutations.
 - **POST_APPLY_SMOKE**: Re-check runtime health/delivery path after apply.
@@ -98,6 +99,8 @@ The goal: every session leaves the memory garden richer than it found it.
 
 Once the state machine is active, the following transitions MUST happen in the same turn without stopping to wait for a ping:
 
+- **SKILL_ROUTING complete** → immediately run RESEARCH (if not SKIP) in the same turn.
+- **RESEARCH complete** → immediately proceed to REQUIREMENTS_SIGNOFF in the same turn.
 - **CODE exit 0** → immediately run TEST in the same turn.
 - **CODE exit non-0** → diagnose, fix, and re-run CODE in the same turn (max 2 reworks), then TEST.
 - **TEST pass** → immediately run CONFIG_QA and FUNCTIONAL_SMOKE in the same turn.

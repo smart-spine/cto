@@ -40,6 +40,18 @@ Error classification and retry guidance:
 - For any non-zero exit code, do NOT silently continue. Always explain the failure to the user.
 - Maximum 2 automatic retries per command. If still failing after 2 retries, report to the user and ask for guidance.
 
+Agent reset procedure (MANDATORY when clearing sessions, memory, or data for an agent):
+- ALWAYS run `openclaw cron list --agent <agent-id>` BEFORE and AFTER clearing sessions.
+- Reason: agents can create their own cron jobs during sessions. A "full reset" that only clears
+  sessions leaves rogue cron jobs running — causing errors every cycle until manually discovered.
+- Mandatory steps for any agent reset:
+  1. `openclaw cron list --agent <agent-id>` — audit ALL jobs for this agent.
+  2. For each unexpected or rogue job: `openclaw cron delete --id <job-id>`.
+  3. Only after cron is clean: clear sessions / data files.
+  4. `openclaw cron list --agent <agent-id>` again post-reset to confirm clean state.
+- A gateway restart does NOT remove cron jobs. Cron jobs persist across restarts by design.
+- If cron list returns unexpected jobs not configured by CTO, treat as rogue and delete before reset.
+
 Restart-specific guard:
 - Gateway restart requests must hand off to `factory-gateway-restart`.
 - Never run direct blocking `openclaw gateway restart` as a single silent action.

@@ -6,6 +6,8 @@ This file is the single source of truth for how CTO delegates code/config mutati
 
 Before any CODE/CONFIG mutation:
 
+**Timing**: steps 1–3 MUST run during SESSION BOOT (see AGENTS.md SESSION BOOT PROTOCOL), not deferred until the first CODE step.
+
 1. Resolve `OPENCLAW_ROOT` (directory containing root `openclaw.json`).
 2. Detect and persist active code agent:
    - `python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_code_agent_memory.py" ensure --openclaw-root "$OPENCLAW_ROOT"`
@@ -34,6 +36,7 @@ If no supported code agent is found:
 - Direct manual mutation of ANY project file is forbidden (`.md`, `.json`, `.sh`, `.js`, `.ts`, `.py`, and others).
 - Manual fallback writes after delegation failure are forbidden (for example shell redirection/heredoc writes, ad-hoc interpreter writes, or manual patch edits used to bypass code-agent execution).
 - `sessions_spawn`/`sessions_send`/subagent mutation fallback is forbidden for primary code/config work.
+- The built-in openclaw `coding-agent` skill (`/usr/lib/node_modules/openclaw/skills/coding-agent/SKILL.md`) is FORBIDDEN as a delegation path — it instructs naked `codex exec` which bypasses all guards below. Use CODEX_PROTOCOL (section 3) or CLAUDE_PROTOCOL (section 4) exclusively.
 
 Exemptions from delegation requirement:
 - `.cto-brain/` operational state and memory garden writes are performed by CTO Python helper scripts, not through code-agent delegation.
@@ -42,6 +45,28 @@ Exemptions from delegation requirement:
 
 - Every delegation MUST include `Write Unit Tests & Verify`.
 - For non-trivial tasks, MUST run `PLAN -> IMPLEMENT -> AUDIT`.
+
+### Doc-sync checklist (MANDATORY when any constant, config value, or agent parameter changes)
+
+When a code change modifies a constant, threshold, limit, model name, or any agent parameter
+(e.g. capital size, stop-loss %, interval, fee rate, agent name), the delegation prompt MUST
+explicitly instruct the code agent to sync ALL reference locations — not just the source variable.
+
+Mandatory sync targets to check and update:
+- `IDENTITY.md` — description, rules, operating parameters
+- `SOUL.md` — personality/values references to numeric constraints
+- Code docstrings and inline comments that mention the value
+- Test fixtures and mock return values that reference the old value
+- Any `.md` files in `skills/` that describe the behavior in human-readable terms
+
+How to enforce: append to every delegation prompt that changes a parameter value:
+```
+After changing the value, grep the entire workspace for the old value and update every
+occurrence in IDENTITY.md, SOUL.md, docstrings, comments, and test fixtures. Do not leave
+stale references. Report every file updated.
+```
+
+Failure to sync is a protocol violation — the same drift will recur on the next session compaction.
 - Plan/exec outputs MUST include machine-checkable blocks:
   - `CODEX_PLAN_JSON_BEGIN/END`
   - `CODEX_EXEC_REPORT_JSON_BEGIN/END`

@@ -14,10 +14,10 @@ Mandatory use:
 | Task intent | Primary skill(s) | Secondary skill(s) | Do not use |
 | --- | --- | --- | --- |
 | Micro scratch code task (ephemeral, no project/config/apply mutation) | `factory-codegen` | `factory-keepalive` (if expected >90s) | full intake survey/sign-off option trees |
-| Build/create a new agent | `factory-create-agent`, `factory-skill-creator`, `factory-backup` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-coherence-review`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
-| Add/update skills in an existing agent | `factory-skill-creator` | `factory-codegen`, `factory-coherence-review`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
+| Build/create a new agent | `factory-research` (DEEP), `factory-create-agent`, `factory-skill-creator`, `factory-backup` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-coherence-review`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
+| Add/update skills in an existing agent | `factory-skill-creator` | `factory-research` (LIGHT), `factory-codegen`, `factory-coherence-review`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
 | Review/audit agent profile files for coherence | `factory-coherence-review` | — | ad-hoc single-file review without reading full set |
-| Modify existing code/config behavior | `factory-codegen`, `factory-backup` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-create-agent` |
+| Modify existing code/config behavior | `factory-research` (LIGHT or DEEP per complexity), `factory-codegen`, `factory-backup` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-create-agent` |
 | Design/modify Telegram interactive UX (buttons, menus, command surface) | `factory-ux-designer` | `factory-create-agent`, `factory-test-agent`, `factory-smoke` | direct implementation without UX safety spec |
 | Investigate unknown errors or external APIs | `factory-research` | `factory-preflight`, `factory-codegen` | blind implementation without docs check |
 | OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only) | naked operational commands without protocol wrapper |
@@ -57,6 +57,10 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 11. For new-agent runtime validation:
    - use `factory-smoke` for one-shot execution,
    - if cross-agent transport is available, prefer `sessions_spawn` + `sessions_send` for black-box interaction with the created agent.
+12. **The built-in openclaw `coding-agent` skill is FORBIDDEN for all production code/config mutations.**
+   - Do NOT read or follow `/usr/lib/node_modules/openclaw/skills/coding-agent/SKILL.md` for project mutations.
+   - It teaches naked `codex exec` which bypasses all guards (no retries, no failure budget, no JSON markers, no output gate).
+   - ALWAYS use `factory-codegen` + `CODE_AGENT_PROTOCOLS.md` (CODEX_PROTOCOL or CLAUDE_PROTOCOL) instead.
 
 ## Evidence Requirements
 
