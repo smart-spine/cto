@@ -57,6 +57,10 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 11. For new-agent runtime validation:
    - use `factory-smoke` for one-shot execution,
    - if cross-agent transport is available, prefer `sessions_spawn` + `sessions_send` for black-box interaction with the created agent.
+12. **The built-in openclaw `coding-agent` skill is FORBIDDEN for all production code/config mutations.**
+   - Do NOT read or follow `/usr/lib/node_modules/openclaw/skills/coding-agent/SKILL.md` for project mutations.
+   - It teaches naked `codex exec` which bypasses all guards (no retries, no failure budget, no JSON markers, no output gate).
+   - ALWAYS use `factory-codegen` + `CODE_AGENT_PROTOCOLS.md` (CODEX_PROTOCOL or CLAUDE_PROTOCOL) instead.
 
 ## Evidence Requirements
 

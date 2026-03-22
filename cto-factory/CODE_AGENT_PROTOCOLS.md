@@ -34,6 +34,7 @@ If no supported code agent is found:
 - Direct manual mutation of ANY project file is forbidden (`.md`, `.json`, `.sh`, `.js`, `.ts`, `.py`, and others).
 - Manual fallback writes after delegation failure are forbidden (for example shell redirection/heredoc writes, ad-hoc interpreter writes, or manual patch edits used to bypass code-agent execution).
 - `sessions_spawn`/`sessions_send`/subagent mutation fallback is forbidden for primary code/config work.
+- The built-in openclaw `coding-agent` skill (`/usr/lib/node_modules/openclaw/skills/coding-agent/SKILL.md`) is FORBIDDEN as a delegation path — it instructs naked `codex exec` which bypasses all guards below. Use CODEX_PROTOCOL (section 3) or CLAUDE_PROTOCOL (section 4) exclusively.
 
 Exemptions from delegation requirement:
 - `.cto-brain/` operational state and memory garden writes are performed by CTO Python helper scripts, not through code-agent delegation.
