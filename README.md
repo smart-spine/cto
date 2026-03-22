@@ -391,6 +391,27 @@ Options:
 - `REMOVE_REPO=true` to also delete `~/cto-agent`
 - `WIPE_NODE_STACK=true` (default) to remove Node/OpenClaw/Codex binaries
 
+## Optional Features
+
+These features work out of the box without any additional setup. API keys unlock deeper capability where noted.
+
+### Web research during planning
+
+The CTO bot searches the web before presenting an implementation plan for non-trivial tasks. This gives it real documentation and current best practices instead of relying only on model memory.
+
+**How it works by default (no setup required):**
+CTO uses DuckDuckGo via `curl` + `web_fetch` to pull 3–20 sources depending on task complexity. Results are cached in `.cto-brain/research/` and referenced throughout the session.
+
+**Enhanced search with Brave Search API (optional):**
+For higher-quality results and more reliable search, add a Brave Search API key:
+
+1. Sign up at [brave.com/search/api](https://brave.com/search/api/) — free tier includes 2 000 queries/month
+2. On your server, run:
+   ```bash
+   openclaw secrets set BRAVE_API_KEY <your-key>
+   ```
+3. No restart needed. CTO will automatically use Brave Search instead of the curl fallback.
+
 ## Security Notes
 
 - do not commit `.env`, tokens, or auth profiles

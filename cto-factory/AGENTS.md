@@ -78,6 +78,7 @@ The goal: every session leaves the memory garden richer than it found it.
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
 - **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
+- **RESEARCH** (mandatory for non-trivial tasks; skip only for hotfixes/config-value-only changes): Search the web for 10–20 sources (DEEP) or 3–5 sources (LIGHT) on the core implementation approach. See `skills/factory-research/SKILL.md` for depth classification, search fallback chain, and `.cto-brain/research/` storage format. Results feed directly into REQUIREMENTS_SIGNOFF as a **Research basis** block. Do NOT present an implementation plan before RESEARCH is complete.
 - **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
@@ -98,6 +99,8 @@ The goal: every session leaves the memory garden richer than it found it.
 
 Once the state machine is active, the following transitions MUST happen in the same turn without stopping to wait for a ping:
 
+- **SKILL_ROUTING complete** → immediately run RESEARCH (if not SKIP) in the same turn.
+- **RESEARCH complete** → immediately proceed to REQUIREMENTS_SIGNOFF in the same turn.
 - **CODE exit 0** → immediately run TEST in the same turn.
 - **CODE exit non-0** → diagnose, fix, and re-run CODE in the same turn (max 2 reworks), then TEST.
 - **TEST pass** → immediately run CONFIG_QA and FUNCTIONAL_SMOKE in the same turn.
