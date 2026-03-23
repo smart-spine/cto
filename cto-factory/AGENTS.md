@@ -78,7 +78,7 @@ The goal: every session leaves the memory garden richer than it found it.
 ## EXECUTION STATE MACHINE
 - **INTAKE**: Collect REQUIRED business inputs.
 - **SKILL_ROUTING**: Select the minimal skill set from `SKILL_ROUTING.md` and record primary/secondary skills before implementation planning.
-- **RESEARCH** (mandatory for non-trivial tasks; skip only for hotfixes/config-value-only changes): Search the web for 10–20 sources (DEEP) or 3–5 sources (LIGHT) on the core implementation approach. See `skills/factory-research/SKILL.md` for depth classification, search fallback chain, and `.cto-brain/research/` storage format. Results feed directly into REQUIREMENTS_SIGNOFF as a **Research basis** block. Do NOT present an implementation plan before RESEARCH is complete.
+- **RESEARCH** (mandatory for non-trivial tasks; skip only for hotfixes/config-value-only changes): **MANDATORY FIRST — Step 0 (no exceptions)**: Run `npx clawhub@latest search "<task keyword>"` BEFORE any web search or planning. If a result looks relevant, run `npx clawhub@latest inspect <slug>` and surface findings neutrally to the user (see `skills/factory-research/SKILL.md` Step 0 for exact format). **Skipping Step 0 is a protocol violation — it is treated the same as skipping the entire RESEARCH phase.** After Step 0: Search the web for 10–20 sources (DEEP) or 3–5 sources (LIGHT) on the core implementation approach. See `skills/factory-research/SKILL.md` for depth classification, search fallback chain, and `.cto-brain/research/` storage format. Results feed directly into REQUIREMENTS_SIGNOFF as a **Research basis** block. Do NOT present an implementation plan before RESEARCH is complete.
 - **REQUIREMENTS_SIGNOFF**: Present final requirements + architecture and request explicit approval (`YES`) before any implementation.
 - **PREFLIGHT**: Check workspace, provider/model alignment, risk, and blast radius.
 - **BACKUP**: Create rollback point (`backup/<task-id>`).
@@ -159,7 +159,8 @@ Hard prohibition summary (NO EXCEPTIONS):
 - New agents MUST be isolated in `${OPENCLAW_ROOT}/workspace-<agent_name>/`.
 - Base profile files MUST be at workspace root (NOT in `agent/`):
   - `IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md` or `README.md`
-- Required subfolders: `config/`, `tools/`, `tests/`, `skills/` (with `skills/SKILL_INDEX.md` and at least one concrete skill file).
+- Required subfolders: `config/`, `tools/`, `tests/`, `skills/` (with `skills/SKILL_INDEX.md` and at least one concrete skill file), `docs/` (design decisions, architecture notes, references for LLM context).
+- `AGENTS.md` MUST be ≤100 lines and act as a **table of contents only** — pointers to deeper docs, not the docs themselves. Detailed protocols, design rationale, and reference material MUST go in `docs/`. A monolithic AGENTS.md crowds task context and makes agents ignore constraints.
 - Root `openclaw.json` registration is MANDATORY with absolute paths:
   - `workspace = ${OPENCLAW_ROOT}/workspace-<agent_name>`
   - `agentDir = ${OPENCLAW_ROOT}/workspace-<agent_name>`
@@ -173,6 +174,7 @@ Hard prohibition summary (NO EXCEPTIONS):
 - NEVER assume config lives under `workspace-factory/`.
 - If validation fails, delegate fix to remembered code agent and re-run.
 - NEVER return `READY_FOR_APPLY` with failing config validation.
+- **Cron jobs MUST be managed via `openclaw cron add|edit|rm` CLI — NEVER by writing `cron.jobs` directly into `openclaw.json`.** The `cron.jobs` key is a legacy format and will fail validation. Delegate cron mutations through `factory-openclaw-ops` skill.
 
 ## FUNCTIONAL SMOKE RULES (PRE-APPLY)
 - Functional smoke before `READY_FOR_APPLY` is MANDATORY.

@@ -11,7 +11,7 @@ Scope:
 - `openclaw secrets *`
 - `openclaw system event --mode now --text "..."`
 - `openclaw message send --channel <channel> --target <target> --message "..."`
-- `openclaw cron list|update|edit`
+- `openclaw cron add|list|edit|rm|enable|disable|run` — **cron mutations MUST use CLI only; never write `cron.jobs` key directly into `openclaw.json`** (legacy format, fails validation)
 - `openclaw agents list`
 - other OpenClaw runtime diagnostics and health checks
 

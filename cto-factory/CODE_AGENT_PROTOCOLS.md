@@ -43,6 +43,11 @@ Exemptions from delegation requirement:
 - git backup branch creation, git status/diff/checkpoint operations.
 - non-code operational controls (`openclaw gateway ...`, `openclaw secrets reload`).
 
+**Hard write-scope prohibition (NO EXCEPTIONS):**
+- Code-agent delegation MUST NOT target any file under `workspace-factory/` — this includes `skills/`, `scripts/`, and all root profile markdown files (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `HEARTBEAT.md`, `PROMPTS.md`, `SKILL_ROUTING.md`, `USER.md`, `CODE_AGENT_PROTOCOLS.md`).
+- Allowed write targets for delegated code work: `${OPENCLAW_ROOT}/workspace-<agent_name>/` and explicitly named output paths outside `workspace-factory/`.
+- If a delegation prompt accidentally mutates a `workspace-factory/` file (overwrite, create, or delete), treat as `BLOCKED: WORKSPACE_SCOPE_VIOLATION` and restore from git.
+
 - Every delegation MUST include `Write Unit Tests & Verify`.
 - For non-trivial tasks, MUST run `PLAN -> IMPLEMENT -> AUDIT`.
 
@@ -110,7 +115,7 @@ Primary non-interactive command path:
   ```
 
 Recommended flags:
-- `--model claude-opus-4-6` (default; fallback to `claude-sonnet-4-5` if opus unavailable)
+- `--model claude-opus-4-6` (default; fallback to `claude-sonnet-4-6` if opus unavailable)
 - `--effort medium|high` for complex tasks
 
 Operational rules:

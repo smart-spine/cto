@@ -39,10 +39,12 @@ Create `<OPENCLAW_ROOT>/workspace-<agent_name>/` with:
   - `tools/`
   - `tests/`
   - `skills/`
+  - `docs/` — design decisions, architecture notes, reference docs formatted for LLM context
 - skills minimum:
   - `skills/SKILL_INDEX.md`
   - at least one `skills/<skill-name>/SKILL.md`
 - `README.md` or `AGENTS.md` MUST contain a "Skills" section with links to both `SKILL_ROUTING.md` and `skills/SKILL_INDEX.md`
+- **AGENTS.md MUST be ≤100 lines** — thin table of contents only, with pointers to `docs/` for deeper content. Per OpenAI Harness Engineering: a large AGENTS.md crowds task context and degrades agent compliance. Protocols, design rationale, and reference docs belong in `docs/`, not in `AGENTS.md`.
 
 Do NOT place base profile files in `<OPENCLAW_ROOT>/workspace-<agent_name>/agent/`.
 Do NOT create nested workspace under `workspace-factory/workspace-<agent_name>`.
