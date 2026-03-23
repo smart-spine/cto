@@ -43,8 +43,11 @@ Evaluate results by quality signals (strongest first):
 2. **Official skill** — one of ~50 maintained directly by OpenClaw
 3. **High adoption** — 1 000+ downloads and 5+ stars
 
-If a candidate is found, audit it before recommending:
+If a candidate is found, inspect it and audit before recommending:
 ```bash
+# Get skill metadata (owner, dates, license)
+npx clawhub@latest inspect <slug>
+
 # Non-destructive 10-point security check
 openclaw-security-check ./skills/<skill-slug>/
 ```
