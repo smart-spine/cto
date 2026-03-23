@@ -30,11 +30,12 @@ Use option 1 if available; fall through to 2 if `search_web` errors or returns e
 
 ### Step 0 — Check for existing skills before building (MANDATORY for any new tool/integration)
 
-Before researching how to build something, check whether a quality skill already exists:
+Before researching how to build something, check whether a quality skill already exists.
+`clawhub` requires no global install — use `npx clawhub@latest` directly:
 
 ```bash
-# Search the OpenClaw skill registry
-clawhub search "<task keyword>"          # e.g. "reddit scraper", "github issues", "slack notify"
+# Search the OpenClaw skill registry (no install needed)
+npx clawhub@latest search "<task keyword>"   # e.g. "reddit scraper", "github issues", "slack notify"
 ```
 
 Evaluate results by quality signals (strongest first):
@@ -49,7 +50,7 @@ openclaw-security-check ./skills/<skill-slug>/
 ```
 
 **If a quality match passes audit:** include in the REQUIREMENTS_SIGNOFF plan as:
-> *"Existing skill found: `<slug>` (Verified / N downloads). Recommend installing via `clawhub install <slug>` instead of building from scratch."*
+> *"Existing skill found: `<slug>` (Verified / N downloads). Recommend installing via `npx clawhub@latest install <slug>` instead of building from scratch."*
 Present it as the default option — user can override and request a custom build.
 
 **If no quality match:** proceed to steps 1–6 below.
