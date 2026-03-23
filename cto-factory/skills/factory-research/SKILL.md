@@ -33,13 +33,18 @@ Use option 1 if available; fall through to 2 if `search_web` errors or returns e
 Before researching how to build something, check whether a quality skill already exists.
 `clawhub` requires no global install — use `npx clawhub@latest` directly:
 
+**Decompose the task into external dependencies first** — search by component, not by full task description. A task like "Reddit pain finder that posts to Telegram" has two searchable components: `reddit` and `telegram`. Search each one separately:
+
 ```bash
-# Search the OpenClaw skill registry (no install needed)
-npx clawhub@latest search "<task keyword>"   # e.g. "reddit scraper", "github issues", "slack notify"
+# Search per external service/API the task depends on
+npx clawhub@latest search "reddit"          # not "reddit pain finder"
+npx clawhub@latest search "telegram notify" # if Telegram delivery is custom
 
 # If a candidate looks relevant, inspect it for metadata + security scan results
 npx clawhub@latest inspect <slug>
 ```
+
+A skill that covers even **part** of the task is worth surfacing — the agent can use its output instead of rebuilding that layer from scratch.
 
 **Evaluating candidates:**
 
