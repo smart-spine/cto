@@ -36,27 +36,30 @@ Before researching how to build something, check whether a quality skill already
 ```bash
 # Search the OpenClaw skill registry (no install needed)
 npx clawhub@latest search "<task keyword>"   # e.g. "reddit scraper", "github issues", "slack notify"
-```
 
-Evaluate results by quality signals (strongest first):
-1. **Verified badge** — reviewed by OpenClaw team, passes security scan, actively maintained
-2. **Official skill** — one of ~50 maintained directly by OpenClaw
-3. **High adoption** — 1 000+ downloads and 5+ stars
-
-If a candidate is found, inspect it and audit before recommending:
-```bash
-# Get skill metadata (owner, dates, license)
+# If a candidate looks relevant, inspect it for metadata + security scan results
 npx clawhub@latest inspect <slug>
-
-# Non-destructive 10-point security check
-openclaw-security-check ./skills/<skill-slug>/
 ```
 
-**If a quality match passes audit:** include in the REQUIREMENTS_SIGNOFF plan as:
-> *"Existing skill found: `<slug>` (Verified / N downloads). Recommend installing via `npx clawhub@latest install <slug>` instead of building from scratch."*
-Present it as the default option — user can override and request a custom build.
+**Evaluating candidates:**
 
-**If no quality match:** proceed to steps 1–6 below.
+The `inspect` output includes platform security scans (VirusTotal + OpenClaw). Use these — do NOT run additional manual audits. Check:
+- Are both scans **Benign**?
+- Does the summary describe behavior that matches the task?
+- Does the skill only request env vars / permissions that align with its stated purpose?
+
+**If a candidate passes all three checks**, pause RESEARCH and surface it to the user before building anything:
+
+> Found a skill that may cover this task:
+> **`<slug>`** — <one-line summary from inspect>
+> Security: VirusTotal Benign · OpenClaw Benign · <confidence level>
+> Install: `npx clawhub@latest install <slug>`
+>
+> Want to use this skill instead of building from scratch? You'd take responsibility for the final behavior — I'll just set it up. Reply **YES to install** or **NO to build custom**.
+
+Do NOT recommend or default to installing — present it neutrally and let the user decide.
+
+**If no candidate passes (no results, scan flagged, or purpose mismatch):** proceed to steps 1–6 below.
 
 ### Step 1–6 — Web research
 
