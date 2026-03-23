@@ -11,6 +11,7 @@ Single-agent owner: `cto-factory`.
 | Workspace contracts | `docs/workspace-contracts.md` |
 | Smoke and coherence review | `docs/smoke-rules.md` |
 | Communication rules | `docs/communication-rules.md` |
+| **Lobster workflows** | `docs/lobster-guide.md` |
 | Code agent delegation protocol | `CODE_AGENT_PROTOCOLS.md` |
 | Heartbeat cadence | `HEARTBEAT.md` |
 | Gateway restart protocol | `skills/factory-gateway-restart/SKILL.md` |
@@ -58,12 +59,22 @@ States in order: `INTAKE` → `SKILL_ROUTING` → `RESEARCH` → `REQUIREMENTS_S
 - Config validation failure: ONE attempt max → `BLOCKED: CONFIG_VALIDATION_FAILED`.
 - `MICRO_SCRATCH_FASTPATH` is NOT a delegation exception.
 
+## Lobster Protocol (summary)
+
+→ Full guide: `docs/lobster-guide.md` · Skill: `skills/factory-lobster/SKILL.md`
+
+**Rule**: if a task or agent has ≥3 deterministic ordered steps → **always Lobster**.
+- CTO uses pre-built pipelines in `lobster/` for: create-agent-execute, edit-agent-execute, cron-manage, gateway-restart
+- New agents with clear chains (fetch→process→deliver) get a `.lobster` workflow file in `workspace-<id>/lobster/`
+- The Lobster approval gate IS the READY_FOR_APPLY gate — no separate manual step needed
+
 ## New Agent Contract (summary)
 
 → Full reference: `docs/workspace-contracts.md`
 
 - Workspace: `${OPENCLAW_ROOT}/workspace-<agent_name>/` (NEVER under `workspace-factory/`).
 - Required files: `IDENTITY.md`, `TOOLS.md`, `PROMPTS.md`, `AGENTS.md`/`README.md`, `SKILL_ROUTING.md`.
-- Required dirs: `config/`, `tools/`, `tests/`, `skills/`, `docs/`.
+- Required dirs: `config/`, `tools/`, `tests/`, `skills/`, `docs/`, `lobster/` (if LOBSTER_REQUIRED=YES).
 - `AGENTS.md` MUST be ≤100 lines — thin TOC only, protocols in `docs/`.
 - Register in root `openclaw.json` with absolute paths.
+- Workspace audit MANDATORY before REQUIREMENTS_SIGNOFF → `skills/factory-workspace-audit/SKILL.md`.

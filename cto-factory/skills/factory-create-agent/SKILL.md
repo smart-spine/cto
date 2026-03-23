@@ -49,6 +49,30 @@ Create `<OPENCLAW_ROOT>/workspace-<agent_name>/` with:
 Do NOT place base profile files in `<OPENCLAW_ROOT>/workspace-<agent_name>/agent/`.
 Do NOT create nested workspace under `workspace-factory/workspace-<agent_name>`.
 
+## WORKSPACE AUDIT (MANDATORY before REQUIREMENTS_SIGNOFF)
+
+Run `factory-workspace-audit` before presenting the sign-off. Include audit report in sign-off packet.
+→ `skills/factory-workspace-audit/SKILL.md`
+
+## LOBSTER DECISION (MANDATORY during SKILL_ROUTING)
+
+For every new agent, classify the primary flow:
+- If the agent has ≥3 deterministic ordered steps (fetch→process→deliver, schedule→run→report, etc.) → **LOBSTER_REQUIRED=YES**
+- If LOBSTER_REQUIRED=YES:
+  - Create `workspace-<agent_id>/lobster/<flow_name>.lobster`
+  - Enable `tools.alsoAllow: ["lobster"]` for the agent in `openclaw.json`
+  - Document Lobster invocation in agent's `PROMPTS.md` and `SKILL_ROUTING.md`
+  - Smoke MUST include a real Lobster dry-run (not just static file validation)
+→ Full guide in `docs/lobster-guide.md` and `skills/factory-lobster/SKILL.md`
+
+## TASK DECOMPOSITION (MANDATORY before CODE)
+
+Break implementation into atomic sub-tasks before delegating to code agent:
+- T1, T2, ... each independently testable
+- Show task list in sign-off packet
+- Code agent delegation uses one focused prompt per sub-task (not one big prompt for all)
+→ Rules in `CODE_AGENT_PROTOCOLS.md` section 5
+
 ## CODE AGENT EXECUTION RULES
 - Delegation protocol → `CODE_AGENT_PROTOCOLS.md`.
 - For non-trivial new agents, `factory-codex-plan-audit` is MANDATORY:
@@ -100,6 +124,19 @@ If any check fails, return `BLOCKED: WORKSPACE_PATH_INVALID`.
 Invoke `factory-coherence-review` with this agent's workspace.
 Full procedure in `skills/factory-coherence-review/SKILL.md`.
 Include the review report (iterations + final state) in the handoff packet.
+
+## LOBSTER EXECUTION (if LOBSTER_REQUIRED=YES)
+
+After code-agent finishes and code gates pass, invoke Lobster for the deterministic execution phase:
+```json
+{
+  "action": "run",
+  "pipeline": "<OPENCLAW_ROOT>/workspace-factory/lobster/create-agent-execute.lobster",
+  "argsJson": "{\"agent_id\":\"<id>\",\"openclaw_root\":\"<root>\",\"apply_summary\":\"<summary>\"}",
+  "timeoutMs": 300000
+}
+```
+The Lobster approval gate inside this pipeline IS the READY_FOR_APPLY gate.
 
 ## DONE CRITERIA
 Return `READY_FOR_APPLY` ONLY if ALL of the following are green:

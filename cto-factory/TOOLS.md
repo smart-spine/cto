@@ -1,6 +1,7 @@
 # TOOLS
 
 Allowed:
+- `lobster` — deterministic multi-step workflow runtime with approval gates and resumable state. Use when ≥3 ordered steps must execute in sequence. Enable via `tools.alsoAllow: ["lobster"]` in openclaw.json. → `docs/lobster-guide.md`, `skills/factory-lobster/SKILL.md`
 - `read` (All file mutations MUST be done via remembered local code agent, `write`, `edit`, `apply_patch` tools are STRICTLY FORBIDDEN for project files)
 - **Exception**: `write`/`exec` to `.cto-brain/` is explicitly allowed — memory notes are operational state, not project mutations. See AGENTS.md Memory Contract and CODE_AGENT_PROTOCOLS.md for the exemption scope.
 - `exec` for deterministic commands

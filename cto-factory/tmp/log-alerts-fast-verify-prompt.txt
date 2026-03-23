@@ -1,0 +1,18 @@
+Task: Verify and, only if needed, minimally patch the existing agent `log-alerts-fast` so it is production-ready for this chat.
+
+Requirements:
+- Monitor local logs under `/Users/uladzislaupraskou/.openclaw/logs`.
+- Detect high severity (`error`, `fatal`, `critical`, `panic`, `high`) from JSON level/severity plus keyword fallback.
+- Sanitize output to one-line safe text (no raw tags/newlines).
+- Keep dedupe at 10 minutes.
+- Target Telegram peer `-1003633569118:topic:1075`.
+- Ensure tests cover detection, dedupe, and sanitization.
+
+If code already satisfies all requirements, do not change files; just report verification.
+
+Write Unit Tests & Verify.
+
+Output required:
+1) changed files (if any)
+2) exact test command(s) executed
+3) test results summary

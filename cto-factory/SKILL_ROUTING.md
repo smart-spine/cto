@@ -14,13 +14,15 @@ Mandatory use:
 | Task intent | Primary skill(s) | Secondary skill(s) | Do not use |
 | --- | --- | --- | --- |
 | Micro scratch code task (ephemeral, no project/config/apply mutation) | `factory-codegen` | `factory-keepalive` (if expected >90s) | full intake survey/sign-off option trees |
-| Build/create a new agent | `factory-research` (DEEP), `factory-create-agent`, `factory-skill-creator`, `factory-backup` | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-coherence-review`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
+| Build/create a new agent | `factory-research` (DEEP), `factory-workspace-audit`, `factory-create-agent`, `factory-skill-creator`, `factory-backup`, `factory-lobster` (MANDATORY if agent has ≥3 deterministic steps) | `factory-ux-designer` (MANDATORY if interactive UI), `factory-codegen`, `factory-codex-plan-audit`, `factory-config-qa`, `factory-coherence-review`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-codegen` alone |
 | Add/update skills in an existing agent | `factory-skill-creator` | `factory-research` (LIGHT), `factory-codegen`, `factory-coherence-review`, `factory-test-agent` | direct ad-hoc docs-only edits without validation |
 | Review/audit agent profile files for coherence | `factory-coherence-review` | — | ad-hoc single-file review without reading full set |
 | Modify existing code/config behavior | `factory-research` (LIGHT or DEEP per complexity), `factory-codegen`, `factory-backup` | `factory-codex-plan-audit`, `factory-config-qa`, `factory-test-agent`, `factory-smoke`, `factory-apply` | `factory-create-agent` |
 | Design/modify Telegram interactive UX (buttons, menus, command surface) | `factory-ux-designer` | `factory-create-agent`, `factory-test-agent`, `factory-smoke` | direct implementation without UX safety spec |
 | Investigate unknown errors or external APIs | `factory-research` | `factory-preflight`, `factory-codegen` | blind implementation without docs check |
-| OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only) | naked operational commands without protocol wrapper |
+| OpenClaw runtime operations (`openclaw ...`) | `factory-openclaw-ops` | `factory-gateway-restart` (restart only), `factory-lobster` (for cron and restart chains) | naked operational commands without protocol wrapper |
+| Deterministic multi-step automation (≥3 ordered steps, clear chain) | `factory-lobster` | `factory-create-agent`, `factory-openclaw-ops` | ad-hoc LLM sequencing for deterministic steps |
+| Workspace state audit (pre-signoff, check duplicates/conflicts) | `factory-workspace-audit` | `factory-intake`, `factory-create-agent` | skipping audit before agent create/edit sign-off |
 | Risky changes requiring rollback safety | `factory-backup` | `factory-rollback` | mutation before backup |
 | Long-running tasks | `factory-keepalive` | `factory-context-compress`, `factory-memory-garden` | silent blocking execution |
 | Persist learned knowledge, decisions, patterns | `factory-memory-garden` | — | single monolithic KNOWLEDGE.md |
@@ -52,6 +54,9 @@ For every newly created agent workspace `workspace-<agent_id>/`:
 6. Never skip `factory-test-agent` for major behavior changes.
 7. Never skip `factory-codex-plan-audit` for non-trivial code-agent tasks (`codex` or `claude`).
 8. Never skip `factory-backup` before CODE/CONFIG mutation paths.
+8a. After code-agent finishes, ALWAYS invoke Lobster (`create-agent-execute.lobster` or `edit-agent-execute.lobster`) for the backup→test→config_qa→apply sequence. Do NOT run these steps manually one by one.
+8b. For any cron mutation, use `cron-manage.lobster`. For gateway restart, use `gateway-restart.lobster`.
+8c. For new agents with clear deterministic flows, `factory-lobster` is MANDATORY — build a `.lobster` workflow file for the agent.
 9. Never skip `factory-apply` once a mutation path reaches `READY_FOR_APPLY` / `APPLY`.
 10. If two skills overlap, pick one primary and document why.
 11. For new-agent runtime validation:

@@ -1,0 +1,7 @@
+meta:
+  lastTouchedVersion: "2026.3.2"
+auth:
+  provders:
+    openrouter:main:
+      provider: openrouter
+      mode: token

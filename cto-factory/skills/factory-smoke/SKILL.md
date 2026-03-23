@@ -28,9 +28,31 @@ Minimum required checks:
 5. Report each check with PASS/FAIL status.
 
 For newly created/modified agents (mandatory):
-6. Run at least one real one-shot execution against the target agent with a bounded timeout:
-   - `timeout 60 openclaw agent --agent <id> --message "<realistic user request>"`
-   - on macOS use `gtimeout 60 ...` if GNU `timeout` is not available.
+6. Run a **full diagnostic smoke** against the target agent. This is a real session — NOT a synthetic check:
+
+   **Step 6a — Diagnostic message** (send to the agent and inspect response):
+   ```
+   timeout 90 openclaw agent --agent <id> \
+     --message "/diagnose: list all your tools, confirm skills are loaded, confirm delivery channel is reachable, report any errors" \
+     --json 2>&1
+   ```
+   PASS criteria for diagnostic response:
+   - Response mentions at least one tool by name (proves tools are loaded)
+   - Response mentions at least one skill by name (proves skill routing works)
+   - Response includes delivery channel status (proves transport is wired)
+   - No "I don't understand" or empty response (proves agent is alive and routing)
+
+   **Step 6b — Skill-targeted invocation** (send a request that triggers the agent's PRIMARY skill):
+   - Use the skill's documented trigger phrase from `SKILL_INDEX.md`
+   - Verify response demonstrates the skill's intended behavior (not generic fallback)
+   - If agent is not yet registered (new agent pending apply): mark as `BLOCKED: REQUIRES_APPLY_FIRST`
+
+   **Step 6c — Tool output verification**:
+   - If the agent uses external tools (Reddit, web, DB, file system): send a request that exercises them
+   - Verify the tool output appears in the response (actual data, not "I'll fetch that later")
+   - If tool requires credentials and they are missing: return `BLOCKED: MISSING_SECRET`
+
+   Self-reported "smoke passed" without command evidence and real response content is a protocol violation.
 
 ## Skill Invocation Testing (mandatory when any skill was created or modified)
 

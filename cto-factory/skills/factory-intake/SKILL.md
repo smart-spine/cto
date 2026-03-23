@@ -37,6 +37,21 @@ Minimum extraction rules:
    - present 2-3 explicit options for each unresolved field,
    - refuse to start implementation in this turn,
    - return `BLOCKED: MISSING_CRITICAL_INPUTS` with exact missing items.
+4d. TASK DECOMPOSITION (MANDATORY for non-trivial tasks):
+   Before producing the sign-off package, break the task into atomic sub-tasks:
+   - Each sub-task: independently testable, single concern, minimal scope
+   - Format: `T1: <what> | acceptance: <how to verify>`
+   - Identify dependencies: if T2 depends on T1, mark as sequential; otherwise can batch
+   - Show the sub-task list in the sign-off package as "Implementation plan"
+   - Skip decomposition ONLY for: hotfixes <10 lines, config-value-only changes, copy/label updates
+   This is shown to the user — it helps them catch scope issues before saying YES.
+
+4e. WORKSPACE AUDIT (MANDATORY before sign-off for any agent create/edit task):
+   Run `factory-workspace-audit` before producing the sign-off package.
+   Include the audit report block in the sign-off.
+   DO NOT present REQUIREMENTS_SIGNOFF without workspace audit completed first.
+   → Full procedure in `skills/factory-workspace-audit/SKILL.md`
+
 5. REQUIREMENTS SIGN-OFF / ARCHITECTURE APPROVAL GATE (MANDATORY BEFORE CODE):
    - after intake questions are complete, produce one explicit sign-off package with:
      - normalized objective,

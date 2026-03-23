@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.2"
+  },
+  "auth": {
+    "profiles": {
+      "openrouter:main": {
+        "provider": "openrouter",
+        "mode": "token",
+        "apiKey": {
+          "source": "openclaw-secrets",
+          "provider": "env",
+          "id": "OPENROUTER_API_KEY"
+        }
+      }
+    },
+    "order": {
+      "openrouter": [
+        "openrouter:main"
+      ]
+    }
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Main Agent",
+        "workspace": "./workspace-main",
+        "agentDir": "./agents/main/agent",
+        "identity": {
+          "name": "Main Agent"
+        }
+      }
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "console"
+      }
+    }
+  ],
+  "channels": {
+    "console": {
+      "enabled": true
+    }
+  }
+}
