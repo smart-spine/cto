@@ -28,6 +28,34 @@ Use option 1 if available; fall through to 2 if `search_web` errors or returns e
 
 ## Procedure
 
+### Step 0 — Check for existing skills before building (MANDATORY for any new tool/integration)
+
+Before researching how to build something, check whether a quality skill already exists:
+
+```bash
+# Search the OpenClaw skill registry
+clawhub search "<task keyword>"          # e.g. "reddit scraper", "github issues", "slack notify"
+```
+
+Evaluate results by quality signals (strongest first):
+1. **Verified badge** — reviewed by OpenClaw team, passes security scan, actively maintained
+2. **Official skill** — one of ~50 maintained directly by OpenClaw
+3. **High adoption** — 1 000+ downloads and 5+ stars
+
+If a candidate is found, audit it before recommending:
+```bash
+# Non-destructive 10-point security check
+openclaw-security-check ./skills/<skill-slug>/
+```
+
+**If a quality match passes audit:** include in the REQUIREMENTS_SIGNOFF plan as:
+> *"Existing skill found: `<slug>` (Verified / N downloads). Recommend installing via `clawhub install <slug>` instead of building from scratch."*
+Present it as the default option — user can override and request a custom build.
+
+**If no quality match:** proceed to steps 1–6 below.
+
+### Step 1–6 — Web research
+
 1. Identify 3–5 focused search queries that cover the core implementation approach for the task.
 2. For each query: run search → collect top URLs → `web_fetch` each URL → extract key facts.
 3. Stop when depth target is reached (DEEP: 10–20 unique sources; LIGHT: 3–5).
