@@ -137,32 +137,39 @@ STEP 3 — Offer real local alternatives:
 - Starting intake questions before stating the capability boundary
 - Any response that does not contain "cannot", "outside my capabilities", "no access", "limitation", or equivalent refusal language in the FIRST sentence
 
-## AGENT BUILD LOBSTER GATE (MANDATORY)
+## AGENT BUILD GATE (MANDATORY — ASYNC STEP-BY-STEP)
 
-For any agent creation task (factory-create-agent skill), the entire build from YES to workspace-ready MUST go through `create-agent-build.lobster`. No exceptions.
+For any agent creation task (factory-create-agent skill), the build MUST start immediately after YES and run to completion without stopping.
 
-**In the SAME turn as receiving YES on intake:**
+**Immediately after receiving YES on intake:**
 
 1. Write all sub-task prompt files to `/tmp/<agent_id>-build/T1.txt` .. `TN.txt` (max T6).
    - This is orchestration — writing prompt files is exempt from code-agent delegation.
    - Each file must be a complete, self-contained codex prompt.
 
-2. Immediately invoke the **lobster** tool (do NOT stop and wait for the next user message):
-```json
-{
-  "action": "run",
-  "pipeline": "<OPENCLAW_ROOT>/workspace-factory/lobster/create-agent-build.lobster",
-  "argsJson": "{\"agent_id\":\"<id>\",\"openclaw_root\":\"<root>\",\"prompts_dir\":\"/tmp/<id>-build\",\"workspace\":\"<root>/workspace-<id>\"}",
-  "timeoutMs": 3600000
-}
-```
+2. Run each task file one at a time using `exec` or `process` tool:
+   ```bash
+   python3 "<OPENCLAW_ROOT>/workspace-factory/scripts/codex_guarded_exec.py" \
+     --workdir "<OPENCLAW_ROOT>" \
+     --prompt-file "/tmp/<agent_id>-build/T1.txt" \
+     --timeout 600
+   ```
+   - Launch via `process` tool (background) and poll for completion.
+   - After T1 finishes, send a short progress note to user ("T1 scaffold done, running T2...").
+   - Then launch T2, poll, report, launch T3, etc.
+   - Skip any TN.txt that does not exist.
 
-3. After Lobster returns — proceed to VALIDATION AND SMOKE in the same turn. Do not stop.
+3. After ALL tasks complete: run `openclaw config validate --json`, check workspace structure, run tests.
+
+4. Proceed to smoke test. Report results to user.
+
+**WHY async step-by-step**: Synchronous Lobster tool calls block for 15+ minutes and timeout the provider API. Running tasks individually via process+poll keeps the session alive and lets you report progress.
 
 **FORBIDDEN patterns:**
-- Saying "I'm preparing the build" and stopping without invoking Lobster
-- Splitting build across multiple turns ("I'll do T1 now, then T2 next message")
-- Any response after YES that doesn't contain an actual Lobster tool invocation or a BLOCKED report
+- Saying "I'm preparing the build" and stopping without executing
+- Calling Lobster tool synchronously for the full build (it will timeout and user gets no response)
+- Splitting build across multiple user turns — all steps must be autonomous after YES
+- Any response after YES that doesn't start actual codex execution
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
