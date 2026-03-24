@@ -258,36 +258,7 @@ steps:
     command: >
       bash -c '
         set -e
-        ROOT="$LOBSTER_ARG_OPENCLAW_ROOT"
-        AGENT="$LOBSTER_ARG_AGENT_ID"
-        WS="$LOBSTER_ARG_WORKSPACE"
-        python3 - "$ROOT/openclaw.json" "$AGENT" "$WS" <<'"'"'PY'"'"'
-import json, sys, pathlib
-config_path = pathlib.Path(sys.argv[1])
-agent_id = sys.argv[2]
-workspace = sys.argv[3]
-d = json.loads(config_path.read_text())
-agents = d.setdefault("agents", {}).setdefault("list", [])
-found = False
-for a in agents:
-    if a.get("id") == agent_id:
-        a["workspace"] = workspace
-        a["agentDir"] = workspace
-        found = True
-        break
-if not found:
-    agents.append({
-        "id": agent_id,
-        "default": False,
-        "name": agent_id.replace("-", " ").title(),
-        "workspace": workspace,
-        "agentDir": workspace,
-        "model": {"primary": "openai-codex/gpt-5.4"},
-        "identity": {"name": agent_id.replace("-", " ").title()}
-    })
-config_path.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
-print(json.dumps({"ok": True, "registered": agent_id, "found_existing": found}))
-PY
+        python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/lobster_register_agent.py" "$LOBSTER_ARG_OPENCLAW_ROOT/openclaw.json" "$LOBSTER_ARG_AGENT_ID" "$LOBSTER_ARG_WORKSPACE"
       '
 
   - id: validate_after_register
