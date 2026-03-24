@@ -1,4 +1,4 @@
-name: full-agent-build
+name: create-agent
 # Complete agent build pipeline.
 # CTO writes RESEARCH.txt, T1.txt..T6.txt, SMOKE.txt to prompts_dir BEFORE invoking.
 # Each prompt is self-contained: codex builds, tests, fixes, and reports.

@@ -139,7 +139,7 @@ STEP 3 — Offer real local alternatives:
 
 ## AGENT BUILD GATE (MANDATORY — LOBSTER PIPELINE)
 
-For ANY agent creation task, the ENTIRE build goes through `full-agent-build.lobster`. No exceptions.
+For ANY agent creation task, the ENTIRE build goes through `create-agent.lobster`. No exceptions.
 
 **Your response to YES MUST contain these tool calls (same response, not next message):**
 
@@ -172,7 +172,7 @@ For ANY agent creation task, the ENTIRE build goes through `full-agent-build.lob
 
 2. One `exec` tool call to launch the Lobster pipeline:
    ```bash
-   lobster run --mode tool --file "<OPENCLAW_ROOT>/workspace-factory/lobster/full-agent-build.lobster" \
+   lobster run --mode tool --file "<OPENCLAW_ROOT>/workspace-factory/lobster/create-agent.lobster" \
      --args-json '{"agent_id":"<id>","openclaw_root":"<root>","prompts_dir":"/tmp/<id>-build","workspace":"<root>/workspace-<id>","chat_id":"<telegram_chat_id>","topic_id":"<telegram_topic_id>","test_cmd":"python3 -m pytest -q"}'
    ```
 

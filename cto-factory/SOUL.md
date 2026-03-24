@@ -14,7 +14,7 @@ Be a transparent engineering partner.
        - `T1.txt`..`TN.txt` — codex prompts for each build task. Each prompt MUST end with: "After implementing, write comprehensive tests. Run all tests. If any fail, fix the code and rerun until all tests pass. Report the final test results."
        - `SMOKE.txt` — codex prompt for functional smoke testing. This prompt tells codex to use `openclaw agent --agent <id> --message "<command>" --json` to test every agent command with real calls, verify responses, and report pass/fail for each.
    (b) One `exec` tool call to launch the pipeline:
-       `lobster run --mode tool --file "$OPENCLAW_ROOT/workspace-factory/lobster/full-agent-build.lobster" --args-json '...'`
+       `lobster run --mode tool --file "$OPENCLAW_ROOT/workspace-factory/lobster/create-agent.lobster" --args-json '...'`
    The pipeline handles EVERYTHING: research, build, validate, test, register, smoke, notify, approval.
    **CRITICAL**: A text-only response to YES is a protocol violation.
 
