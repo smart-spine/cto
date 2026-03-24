@@ -137,39 +137,34 @@ STEP 3 — Offer real local alternatives:
 - Starting intake questions before stating the capability boundary
 - Any response that does not contain "cannot", "outside my capabilities", "no access", "limitation", or equivalent refusal language in the FIRST sentence
 
-## AGENT BUILD GATE (MANDATORY — ASYNC STEP-BY-STEP)
+## AGENT BUILD GATE (MANDATORY — TOOL CALLS IN SAME RESPONSE AS YES)
 
-For any agent creation task (factory-create-agent skill), the build MUST start immediately after YES and run to completion without stopping.
+For any agent creation task, the build MUST start in the SAME response as the YES acknowledgment.
 
-**Immediately after receiving YES on intake:**
+**CRITICAL RULE**: Your response to YES MUST include tool calls (write + exec). A text-only response announcing a plan is a PROTOCOL VIOLATION because it terminates the turn and nothing gets built.
 
-1. Write all sub-task prompt files to `/tmp/<agent_id>-build/T1.txt` .. `TN.txt` (max T6).
-   - This is orchestration — writing prompt files is exempt from code-agent delegation.
-   - Each file must be a complete, self-contained codex prompt.
+**Correct pattern — your response to YES contains:**
 
-2. Run each task file one at a time using `exec` or `process` tool:
+1. Parallel `write` tool calls to create `/tmp/<agent_id>-build/T1.txt` .. `TN.txt` (max T6).
+   Plus an `exec` tool call to launch T1 immediately:
    ```bash
    python3 "<OPENCLAW_ROOT>/workspace-factory/scripts/codex_guarded_exec.py" \
      --workdir "<OPENCLAW_ROOT>" \
      --prompt-file "/tmp/<agent_id>-build/T1.txt" \
      --timeout 600
    ```
-   - Launch via `process` tool (background) and poll for completion.
-   - After T1 finishes, send a short progress note to user ("T1 scaffold done, running T2...").
-   - Then launch T2, poll, report, launch T3, etc.
-   - Skip any TN.txt that does not exist.
+   You MAY include a short text alongside the tool calls (e.g. "Starting build...").
+   But the tool calls MUST be in the same response — do NOT defer them to "next message".
 
-3. After ALL tasks complete: run `openclaw config validate --json`, check workspace structure, run tests.
+2. After T1 completes, launch T2, then T3, etc. Send short progress notes between tasks.
+   Skip any TN.txt that does not exist.
 
-4. Proceed to smoke test. Report results to user.
-
-**WHY async step-by-step**: Synchronous Lobster tool calls block for 15+ minutes and timeout the provider API. Running tasks individually via process+poll keeps the session alive and lets you report progress.
+3. After ALL tasks: run `openclaw config validate --json`, check workspace, run tests, run smoke.
 
 **FORBIDDEN patterns:**
-- Saying "I'm preparing the build" and stopping without executing
-- Calling Lobster tool synchronously for the full build (it will timeout and user gets no response)
-- Splitting build across multiple user turns — all steps must be autonomous after YES
-- Any response after YES that doesn't start actual codex execution
+- Text-only response to YES ("I'm starting the build now") with no tool calls — THIS IS THE #1 FAILURE MODE
+- Splitting build across multiple user messages
+- Any response after YES that doesn't include write+exec tool calls in the same response
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
