@@ -67,17 +67,49 @@ For every new agent, classify the primary flow:
 
 ## TASK DECOMPOSITION (MANDATORY before CODE)
 
-Break implementation into atomic sub-tasks before delegating to code agent:
+Break implementation into atomic sub-tasks:
 - T1, T2, ... each independently testable
 - Show task list in sign-off packet
-- Code agent delegation uses one focused prompt per sub-task (not one big prompt for all)
-→ Rules in `CODE_AGENT_PROTOCOLS.md` section 5
+- Write one focused prompt file per sub-task (not one big prompt for all)
 
-## CODE AGENT EXECUTION RULES
-- Delegation protocol → `CODE_AGENT_PROTOCOLS.md`.
-- For non-trivial new agents, `factory-codex-plan-audit` is MANDATORY:
-  - plan gate pass before implementation,
-  - execution report gate pass before READY.
+## BUILD LOBSTER PIPELINE (MANDATORY — replaces direct codex delegation)
+
+After REQUIREMENTS_SIGNOFF, ALL build execution goes through `create-agent-build.lobster`.
+Direct calls to `codex_guarded_exec.py` for agent build tasks are FORBIDDEN.
+
+**Steps (must complete in the same turn as the YES message):**
+
+**Step 1 — Write prompt files** (exempt from code-agent delegation — orchestration only):
+```bash
+mkdir -p /tmp/<agent_id>-build/
+# Write one file per task:
+# /tmp/<agent_id>-build/T1.txt  ← scaffold + profile
+# /tmp/<agent_id>-build/T2.txt  ← UX / Telegram handlers
+# /tmp/<agent_id>-build/T3.txt  ← core business logic
+# /tmp/<agent_id>-build/T4.txt  ← LLM/analysis/delivery
+# /tmp/<agent_id>-build/T5.txt  ← tests + config registration
+# T6.txt only if a 6th task is needed
+```
+Each prompt file must be a complete, self-contained codex prompt (PLAN → IMPLEMENT → AUDIT format, per `CODE_AGENT_PROTOCOLS.md`).
+
+**Step 2 — Invoke Lobster immediately in the same turn:**
+```json
+{
+  "action": "run",
+  "pipeline": "<OPENCLAW_ROOT>/workspace-factory/lobster/create-agent-build.lobster",
+  "argsJson": "{\"agent_id\":\"<id>\",\"openclaw_root\":\"<root>\",\"prompts_dir\":\"/tmp/<id>-build\",\"workspace\":\"<root>/workspace-<id>\"}",
+  "timeoutMs": 3600000
+}
+```
+
+**On Lobster success** → proceed to VALIDATION AND SMOKE (do not stop and wait for user).
+**On Lobster failure** → report exact failed step + error to user → enter BLOCKED state.
+
+**Rules:**
+- Prompt files are temp orchestration artifacts — writing them is exempt from code-agent delegation.
+- Do NOT split the build across turns. Prompt file writing + Lobster invocation = one turn.
+- For non-trivial agents, each prompt file MUST include `factory-codex-plan-audit` markers (`CODEX_PLAN_JSON_BEGIN/END`, `CODEX_EXEC_REPORT_JSON_BEGIN/END`).
+→ Delegation protocol details in `CODE_AGENT_PROTOCOLS.md`.
 
 ## VALIDATION AND SMOKE (MANDATORY)
 Before `READY_FOR_APPLY`, MUST run all:
@@ -137,6 +169,55 @@ After code-agent finishes and code gates pass, invoke Lobster for the determinis
 }
 ```
 The Lobster approval gate inside this pipeline IS the READY_FOR_APPLY gate.
+
+## INTERNAL STATE MACHINE (Sub-States)
+
+This skill has its own internal state machine that runs inside the top-level CODE state.
+Use `cto_track_manager.py` to track progress through parallel workstreams.
+
+### Sub-States (sequential within each track)
+
+```
+DESIGN ──► CODE_DECOMP ──► CODE ──► TEST ──► COHERENCE ──► REGISTER ──► READY
+```
+
+| Sub-State | Entry Condition | Exit Condition | Tool |
+|---|---|---|---|
+| `DESIGN` | Intake YES received | Architecture agreed | INTAKE sign-off packet |
+| `CODE_DECOMP` | Design done | Sub-task list T1..Tn complete | TASK DECOMPOSITION section |
+| `CODE` | Sub-tasks defined | All T1..Tn green | `codex_guarded_exec.py` |
+| `TEST` | Code complete | All tests pass | Deterministic test suite |
+| `COHERENCE` | Tests pass | Coherence review CLEAN | `factory-coherence-review` |
+| `REGISTER` | Coherence clean | openclaw.json updated, paths valid | PATH SANITY GATE |
+| `READY` | Register done | All DONE CRITERIA met | READY_FOR_APPLY handoff |
+
+### Parallel Tracks (when task complexity warrants)
+
+For agents with multiple independent deliverables, use parallel tracks:
+
+```bash
+# Create tracks for independent workstreams
+python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_track_manager.py" \
+  create tools-track --steps "tool-1,tool-2,tool-3" \
+  --description "agent tools implementation" --openclaw-root "$OPENCLAW_ROOT"
+
+python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_track_manager.py" \
+  create tests-track --steps "unit-tests,integration-tests" \
+  --description "agent test suite" --openclaw-root "$OPENCLAW_ROOT"
+
+python3 "$OPENCLAW_ROOT/workspace-factory/scripts/cto_track_manager.py" \
+  create docs-track --steps "skill-docs,identity,prompts" \
+  --description "agent documentation" --openclaw-root "$OPENCLAW_ROOT"
+```
+
+**Track summary MUST appear in the READY_FOR_APPLY handoff packet.**
+
+### Stopping Points (require explicit user action)
+
+- `DESIGN → CODE_DECOMP`: gated by REQUIREMENTS_SIGNOFF (YES required)
+- `REGISTER → READY`: gated by READY_FOR_APPLY (explicit approval required)
+
+All other sub-state transitions are autonomous — no user input needed.
 
 ## DONE CRITERIA
 Return `READY_FOR_APPLY` ONLY if ALL of the following are green:

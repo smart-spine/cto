@@ -458,6 +458,9 @@ if existing is None:
             "theme": "engineering",
             "emoji": "factory",
         },
+        "tools": {
+            "alsoAllow": ["lobster"],
+        },
     }
     agent_list.append(existing)
 else:
@@ -466,6 +469,9 @@ else:
     existing["workspace"] = str(openclaw_home / "workspace-factory")
     existing["agentDir"] = str(openclaw_home / "agents/cto-factory/agent")
     existing["heartbeat"] = cto_heartbeat
+    existing.setdefault("tools", {}).setdefault("alsoAllow", [])
+    if "lobster" not in existing["tools"]["alsoAllow"]:
+        existing["tools"]["alsoAllow"].append("lobster")
     model = existing.get("model")
     if not isinstance(model, dict):
         model = {}
@@ -497,6 +503,12 @@ for name in ("cto-factory", "main"):
     if name not in allow:
         allow.append(name)
 agent_to_agent["allow"] = allow
+
+# Register lobster plugin (typed workflow runtime for deterministic pipelines)
+plugins = data.setdefault("plugins", {})
+entries = plugins.setdefault("entries", {})
+if "lobster" not in entries:
+    entries["lobster"] = {"enabled": True}
 
 config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 PY

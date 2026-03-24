@@ -553,6 +553,9 @@ cto_payload = {
         "theme": "engineering",
         "emoji": "factory",
     },
+    "tools": {
+        "alsoAllow": ["lobster"],
+    },
 }
 
 found = False
@@ -577,6 +580,12 @@ for name in ("cto-factory", "main"):
     if name not in allow:
         allow.append(name)
 agent_to_agent["allow"] = allow
+
+# Register lobster plugin (typed workflow runtime for deterministic pipelines)
+plugins = data.setdefault("plugins", {})
+entries = plugins.setdefault("entries", {})
+if "lobster" not in entries:
+    entries["lobster"] = {"enabled": True}
 
 config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 PY
