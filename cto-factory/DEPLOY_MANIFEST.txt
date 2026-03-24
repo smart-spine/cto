@@ -84,3 +84,4 @@ skills/factory-ux-designer/SKILL.md
 skills/factory-workspace-audit/SKILL.md
 skills/factory-help/SKILL.md
 lobster/create-agent-build.lobster
+lobster/full-agent-build.lobster

@@ -137,34 +137,53 @@ STEP 3 — Offer real local alternatives:
 - Starting intake questions before stating the capability boundary
 - Any response that does not contain "cannot", "outside my capabilities", "no access", "limitation", or equivalent refusal language in the FIRST sentence
 
-## AGENT BUILD GATE (MANDATORY — TOOL CALLS IN SAME RESPONSE AS YES)
+## AGENT BUILD GATE (MANDATORY — LOBSTER PIPELINE)
 
-For any agent creation task, the build MUST start in the SAME response as the YES acknowledgment.
+For ANY agent creation task, the ENTIRE build goes through `full-agent-build.lobster`. No exceptions.
 
-**CRITICAL RULE**: Your response to YES MUST include tool calls (write + exec). A text-only response announcing a plan is a PROTOCOL VIOLATION because it terminates the turn and nothing gets built.
+**Your response to YES MUST contain these tool calls (same response, not next message):**
 
-**Correct pattern — your response to YES contains:**
+1. `write` tool calls to create all files in `/tmp/<agent_id>-build/`:
+   - `T1.txt` through `T6.txt` — codex prompts (one per build task)
+   - `SMOKE.json` — functional smoke test plan:
+     ```json
+     {
+       "agent_id": "<agent_id>",
+       "smoke_commands": [
+         {"command": "/discover test query", "expect": "candidate", "timeout": 120},
+         {"command": "/status", "expect": "schedule", "timeout": 60}
+       ]
+     }
+     ```
+     Each smoke command is a real agent interaction that proves the built feature works.
+     Include at least one smoke command per major feature the agent implements.
 
-1. Parallel `write` tool calls to create `/tmp/<agent_id>-build/T1.txt` .. `TN.txt` (max T6).
-   Plus an `exec` tool call to launch T1 immediately:
+2. One `exec` tool call to launch the Lobster pipeline:
    ```bash
-   python3 "<OPENCLAW_ROOT>/workspace-factory/scripts/codex_guarded_exec.py" \
-     --workdir "<OPENCLAW_ROOT>" \
-     --prompt-file "/tmp/<agent_id>-build/T1.txt" \
-     --timeout 600
+   lobster run --mode tool --file "<OPENCLAW_ROOT>/workspace-factory/lobster/full-agent-build.lobster" \
+     --args-json '{"agent_id":"<id>","openclaw_root":"<root>","prompts_dir":"/tmp/<id>-build","workspace":"<root>/workspace-<id>","chat_id":"<telegram_chat_id>","topic_id":"<telegram_topic_id>","test_cmd":"python3 -m pytest -q"}'
    ```
-   You MAY include a short text alongside the tool calls (e.g. "Starting build...").
-   But the tool calls MUST be in the same response — do NOT defer them to "next message".
 
-2. After T1 completes, launch T2, then T3, etc. Send short progress notes between tasks.
-   Skip any TN.txt that does not exist.
+3. That is ALL you do. The pipeline handles:
+   - Running T1-T6 via codex_guarded_exec.py
+   - Sending Telegram progress notifications between steps
+   - Validating config
+   - Checking workspace structure
+   - Running unit tests
+   - Running functional smoke (from SMOKE.json)
+   - Registering the agent in openclaw.json
+   - Restarting gateway
+   - Post-apply smoke
+   - Approval gate before apply
 
-3. After ALL tasks: run `openclaw config validate --json`, check workspace, run tests, run smoke.
+**You do NOT**: run codex yourself, run tests yourself, register agents yourself, restart gateway yourself.
+**You DO**: write good prompts, write thorough SMOKE.json, launch lobster, wait for result.
 
 **FORBIDDEN patterns:**
-- Text-only response to YES ("I'm starting the build now") with no tool calls — THIS IS THE #1 FAILURE MODE
-- Splitting build across multiple user messages
-- Any response after YES that doesn't include write+exec tool calls in the same response
+- Text-only response to YES with no tool calls
+- Running codex_guarded_exec.py directly (use lobster)
+- Running tests or smoke manually (lobster does it)
+- Any build step outside the lobster pipeline
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
