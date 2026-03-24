@@ -586,6 +586,10 @@ plugins = data.setdefault("plugins", {})
 entries = plugins.setdefault("entries", {})
 if "lobster" not in entries:
     entries["lobster"] = {"enabled": True}
+plugin_allow = plugins.get("allow", [])
+if isinstance(plugin_allow, list) and "lobster" not in plugin_allow:
+    plugin_allow.append("lobster")
+    plugins["allow"] = plugin_allow
 
 config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 PY
