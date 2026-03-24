@@ -143,20 +143,32 @@ For ANY agent creation task, the ENTIRE build goes through `full-agent-build.lob
 
 **Your response to YES MUST contain these tool calls (same response, not next message):**
 
-1. `write` tool calls to create all files in `/tmp/<agent_id>-build/`:
-   - `T1.txt` through `T6.txt` — codex prompts (one per build task)
-   - `SMOKE.json` — functional smoke test plan:
-     ```json
-     {
-       "agent_id": "<agent_id>",
-       "smoke_commands": [
-         {"command": "/discover test query", "expect": "candidate", "timeout": 120},
-         {"command": "/status", "expect": "schedule", "timeout": 60}
-       ]
-     }
-     ```
-     Each smoke command is a real agent interaction that proves the built feature works.
-     Include at least one smoke command per major feature the agent implements.
+1. `write` tool calls to create ALL files in `/tmp/<agent_id>-build/`:
+
+   **`RESEARCH.txt`** — Codex prompt for web research. Tell codex to:
+   - Search for API docs, libraries, best practices relevant to the agent's tech stack
+   - Use DuckDuckGo via curl or web_fetch for searches
+   - Save findings to `<workspace>/docs/research/` as markdown files
+   - Focus on: API endpoints, auth requirements, rate limits, data formats, known gotchas
+
+   **`T1.txt` through `T6.txt`** — Codex build prompts. Each MUST end with:
+   ```
+   MANDATORY TESTING:
+   After implementing, write comprehensive tests for everything you built.
+   Run all tests with: python3 -m pytest tests/ -v
+   If any test fails, fix the code and rerun until ALL tests pass.
+   Report final test output at the end of your response.
+   ```
+
+   **`SMOKE.txt`** — Codex prompt for functional smoke testing. Tell codex to:
+   - Register the agent in openclaw.json if not already there
+   - Restart the gateway: `openclaw gateway stop && sleep 3 && openclaw gateway start`
+   - Wait for gateway: `sleep 6 && openclaw gateway status`
+   - Test EVERY agent command via real calls: `openclaw agent --agent <id> --message "<command>" --json`
+   - For each command: verify response contains expected data (not generic fallback)
+   - Report PASS/FAIL for each command tested
+   - If any smoke fails: fix the agent code, rerun the failing test
+   - Final output: full smoke report with evidence
 
 2. One `exec` tool call to launch the Lobster pipeline:
    ```bash
@@ -165,19 +177,18 @@ For ANY agent creation task, the ENTIRE build goes through `full-agent-build.lob
    ```
 
 3. That is ALL you do. The pipeline handles:
-   - Running T1-T6 via codex_guarded_exec.py
-   - Sending Telegram progress notifications between steps
-   - Validating config
-   - Checking workspace structure
-   - Running unit tests
-   - Running functional smoke (from SMOKE.json)
-   - Registering the agent in openclaw.json
-   - Restarting gateway
-   - Post-apply smoke
+   - Research via codex (RESEARCH.txt)
+   - Build T1-T6 via codex (each task tests + fixes internally)
+   - Telegram progress notifications between steps
+   - Config validation + workspace structure check
+   - Unit test gate (pipeline-level safety net)
+   - Agent registration in openclaw.json
+   - Smoke test via codex (SMOKE.txt — real agent calls)
    - Approval gate before apply
+   - Gateway restart + post-apply liveness check
 
 **You do NOT**: run codex yourself, run tests yourself, register agents yourself, restart gateway yourself.
-**You DO**: write good prompts, write thorough SMOKE.json, launch lobster, wait for result.
+**You DO**: write detailed prompts with clear test instructions, launch lobster, wait for result.
 
 **FORBIDDEN patterns:**
 - Text-only response to YES with no tool calls
