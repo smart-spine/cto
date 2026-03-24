@@ -137,9 +137,9 @@ STEP 3 — Offer real local alternatives:
 - Starting intake questions before stating the capability boundary
 - Any response that does not contain "cannot", "outside my capabilities", "no access", "limitation", or equivalent refusal language in the FIRST sentence
 
-## AGENT BUILD LOBSTER GATE (MANDATORY)
+## AGENT BUILD GATE (MANDATORY — ONE TURN, NO STOPPING)
 
-For any agent creation task (factory-create-agent skill), the entire build from YES to workspace-ready MUST go through `create-agent-build.lobster`. No exceptions.
+For any agent creation task (factory-create-agent skill), the entire build from YES to workspace-ready MUST complete in ONE TURN.
 
 **In the SAME turn as receiving YES on intake:**
 
@@ -147,23 +147,25 @@ For any agent creation task (factory-create-agent skill), the entire build from 
    - This is orchestration — writing prompt files is exempt from code-agent delegation.
    - Each file must be a complete, self-contained codex prompt.
 
-2. Immediately invoke Lobster (do NOT stop and wait for the next user message):
-```json
-{
-  "action": "run",
-  "pipeline": "<OPENCLAW_ROOT>/workspace-factory/lobster/create-agent-build.lobster",
-  "argsJson": "{\"agent_id\":\"<id>\",\"openclaw_root\":\"<root>\",\"prompts_dir\":\"/tmp/<id>-build\",\"workspace\":\"<root>/workspace-<id>\"}",
-  "timeoutMs": 3600000
-}
-```
+2. Execute each task file sequentially via exec tool. For each TN.txt that exists, run:
+   ```bash
+   python3 "<OPENCLAW_ROOT>/workspace-factory/scripts/codex_guarded_exec.py" \
+     --workdir "<OPENCLAW_ROOT>" \
+     --prompt-file "/tmp/<agent_id>-build/TN.txt" \
+     --timeout 600
+   ```
+   Run T1.txt first (required), then T2 through T6 (skip any that don't exist).
+   Do NOT stop between tasks. Do NOT wait for user input between tasks.
 
-3. After Lobster returns — proceed to VALIDATION AND SMOKE in the same turn. Do not stop.
+3. After ALL tasks complete — run `openclaw config validate --json` and check workspace structure.
+
+4. Proceed to VALIDATION AND SMOKE in the same turn. Do not stop.
 
 **FORBIDDEN patterns:**
-- Saying "I'm preparing the build" and stopping without invoking Lobster
-- Calling `codex_guarded_exec.py` directly for individual tasks instead of via Lobster
+- Saying "I'm preparing the build" and stopping without executing
 - Splitting build across multiple turns ("I'll do T1 now, then T2 next message")
-- Any response after YES that doesn't contain an actual Lobster invocation or a BLOCKED report
+- Any response after YES that doesn't contain actual codex execution or a BLOCKED report
+- Stopping after writing prompt files without running them
 
 ## CODE AGENT WORKER CONTRACT
 → Full delegation rules, command contracts, and guardrails in `CODE_AGENT_PROTOCOLS.md`.
