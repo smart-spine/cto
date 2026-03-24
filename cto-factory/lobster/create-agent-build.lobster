@@ -48,7 +48,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: t2
@@ -62,7 +62,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: t3
@@ -76,7 +76,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: t4
@@ -90,7 +90,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: t5
@@ -104,7 +104,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: t6
@@ -118,7 +118,7 @@ steps:
         python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" \
           --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" \
           --prompt-file "$PFILE" \
-          --timeout 600
+          --timeout 3600
       '
 
   - id: validate_config

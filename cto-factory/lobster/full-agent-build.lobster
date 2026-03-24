@@ -215,7 +215,7 @@ steps:
           echo "{\"skipped\":true,\"reason\":\"no SMOKE.txt\"}"
           exit 0
         fi
-        python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" --prompt-file "$PFILE" --timeout 900
+        python3 "$LOBSTER_ARG_OPENCLAW_ROOT/workspace-factory/scripts/codex_guarded_exec.py" --workdir "$LOBSTER_ARG_OPENCLAW_ROOT" --prompt-file "$PFILE" --timeout 1800
       '
 
   - id: notify_smoke
